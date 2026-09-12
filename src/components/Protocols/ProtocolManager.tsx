@@ -321,13 +321,15 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
       {/* Create / Edit Protocol Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-white">
-              {editingProtocol ? 'Editar Protocolo' : 'Novo Protocolo Recorrente'}
-            </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
+            <div className="p-4 sm:p-5 border-b border-slate-800 shrink-0">
+              <h3 className="text-base font-bold text-white">
+                {editingProtocol ? 'Editar Protocolo' : 'Novo Protocolo Recorrente'}
+              </h3>
+            </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-300">Nome do Protocolo</label>
                 <input

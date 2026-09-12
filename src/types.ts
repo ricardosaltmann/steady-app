@@ -126,6 +126,13 @@ export interface SymptomLog {
   bloodPressureSystolic?: number;
   bloodPressureDiastolic?: number;
   weightKg?: number;
+  heightCm?: number;
+  bodyFatPercent?: number; // % de gordura corporal
+  waistCm?: number;        // Cintura (cm)
+  hipCm?: number;          // Quadril (cm)
+  armCm?: number;          // Braço (cm)
+  thighCm?: number;        // Coxa (cm)
+  chestCm?: number;        // Peitoral / Tórax (cm)
   notes?: string;
 }
 
@@ -135,7 +142,9 @@ export interface UserProfile {
   birthDate?: string;
   age?: number;
   phone?: string;
+  heightCm?: number;
   weightKg?: number;
+  targetWeightKg?: number;
   goal?: string;
   selectedCategories?: CompoundCategory[];
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Syringe, Calendar, Heart, FileText, Calculator } from 'lucide-react';
+import { Activity, Syringe, Calendar, FileText, Calculator, Scale } from 'lucide-react';
 
 export type NavTab = 'chart' | 'injections' | 'protocols' | 'calc' | 'labs' | 'symptoms';
 
@@ -15,7 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onChangeTab })
     { id: 'protocols' as NavTab, label: 'Protocolos', icon: Calendar },
     { id: 'calc' as NavTab, label: 'Diluição', icon: Calculator },
     { id: 'labs' as NavTab, label: 'Exames', icon: FileText },
-    { id: 'symptoms' as NavTab, label: 'Sintomas', icon: Heart },
+    { id: 'symptoms' as NavTab, label: 'Saúde & Peso', icon: Scale },
   ];
 
   return (

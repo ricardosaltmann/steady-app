@@ -434,13 +434,16 @@ export function App() {
           </div>
         )}
 
-        {/* TAB 6: SINTOMAS */}
+        {/* TAB 6: SAÚDE, PESO & SINTOMAS */}
         {currentTab === 'symptoms' && (
           <div className="animate-fadeIn">
             <SymptomTracker
               symptoms={symptoms}
               onSaveSymptom={handleSaveSymptom}
               onDeleteSymptom={handleDeleteSymptom}
+              profile={profile}
+              onSaveProfile={handleSaveProfile}
+              injections={injections}
             />
           </div>
         )}
