@@ -31,6 +31,7 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
   const [dose, setDose] = useState<string>(initialDose ? String(initialDose) : '50');
   const [concentration, setConcentration] = useState<string>('200');
   const [volumeMl, setVolumeMl] = useState<string>('0.25');
+  const [volumeUnits, setVolumeUnits] = useState<string>('25');
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState<string>(
     new Date().toTimeString().slice(0, 5)
@@ -42,37 +43,73 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
 
   const currentCompound = compounds.find(c => c.id === selectedCompoundId) || compounds[0];
 
+  // Helper to sync dose, concentration, mL and UI
+  const updateCalculationsFromDoseAndConc = (newDose: string, newConc: string) => {
+    setDose(newDose);
+    setConcentration(newConc);
+    const d = parseFloat(newDose);
+    const c = parseFloat(newConc);
+    if (!isNaN(d) && !isNaN(c) && c > 0) {
+      const vol = d / c;
+      const formattedMl = vol >= 1 ? vol.toFixed(2) : vol.toFixed(3).replace(/\.?0+$/, '');
+      setVolumeMl(formattedMl);
+      const units = Math.round(vol * 100 * 10) / 10;
+      setVolumeUnits(String(units));
+    }
+  };
+
+  const handleUnitsChange = (newUnits: string) => {
+    setVolumeUnits(newUnits);
+    const u = parseFloat(newUnits);
+    const c = parseFloat(concentration);
+    if (!isNaN(u) && u >= 0) {
+      const vol = u / 100;
+      setVolumeMl(vol.toFixed(3).replace(/\.?0+$/, '') || '0');
+      if (!isNaN(c) && c > 0) {
+        const calculatedDose = vol * c;
+        setDose(calculatedDose >= 1 ? calculatedDose.toFixed(1).replace(/\.0$/, '') : calculatedDose.toFixed(2));
+      }
+    }
+  };
+
+  const handleVolumeMlChange = (newVol: string) => {
+    setVolumeMl(newVol);
+    const vol = parseFloat(newVol);
+    const c = parseFloat(concentration);
+    if (!isNaN(vol) && vol >= 0) {
+      const units = Math.round(vol * 100 * 10) / 10;
+      setVolumeUnits(String(units));
+      if (!isNaN(c) && c > 0) {
+        const calculatedDose = vol * c;
+        setDose(calculatedDose >= 1 ? calculatedDose.toFixed(1).replace(/\.0$/, '') : calculatedDose.toFixed(2));
+      }
+    }
+  };
+
   useEffect(() => {
     if (currentCompound) {
-      if (currentCompound.defaultConcentrationMgMl) {
-        setConcentration(String(currentCompound.defaultConcentrationMgMl));
-      }
+      const defaultConc = currentCompound.defaultConcentrationMgMl ? String(currentCompound.defaultConcentrationMgMl) : '200';
+      setConcentration(defaultConc);
+
       // Set reasonable default dose based on compound
       if (currentCompound.category === 'peptide') {
-        setDose('2.5');
+        const defaultPeptideDose = '2.5';
         setRoute('SubQ');
         setNeedleInfo('31G 5/16"');
+        updateCalculationsFromDoseAndConc(defaultPeptideDose, defaultConc);
       } else if (currentCompound.category === 'fertility') {
-        setDose('250');
+        const defaultFertDose = '250';
         setRoute('SubQ');
         setNeedleInfo('30G 1/2"');
+        updateCalculationsFromDoseAndConc(defaultFertDose, defaultConc);
       } else {
-        setDose('50');
+        const defaultSteroidDose = '50';
         setRoute('IM');
         setNeedleInfo('30G 1/2"');
+        updateCalculationsFromDoseAndConc(defaultSteroidDose, defaultConc);
       }
     }
   }, [selectedCompoundId, currentCompound]);
-
-  // Recalculate volume in mL when dose or concentration changes
-  useEffect(() => {
-    const numDose = parseFloat(dose);
-    const numConc = parseFloat(concentration);
-    if (!isNaN(numDose) && !isNaN(numConc) && numConc > 0) {
-      const vol = (numDose / numConc).toFixed(2);
-      setVolumeMl(vol);
-    }
-  }, [dose, concentration]);
 
   if (!isOpen) return null;
 
@@ -173,58 +210,99 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
           </div>
 
           {/* Dose & Volume Calculator */}
-          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5 space-y-3">
+          <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 space-y-3.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span className="flex items-center gap-1.5 font-medium text-slate-300">
+              <span className="flex items-center gap-1.5 font-bold text-slate-200">
                 <Calculator className="w-3.5 h-3.5 text-blue-400" />
-                Dosagem & Calculador de Volume
+                Dosagem & Medição na Seringa
               </span>
               {onOpenDilutionCalculator && (
                 <button
                   type="button"
                   onClick={onOpenDilutionCalculator}
-                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline transition-colors"
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold underline transition-colors"
                 >
                   Calculadora de Diluição ↗
                 </button>
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {/* 1. Dose */}
               <div className="space-y-1">
-                <label className="text-[11px] text-slate-400">Dose ({currentCompound.unit})</label>
+                <label className="text-[11px] font-medium text-slate-400">
+                  Dose ({currentCompound.unit})
+                </label>
                 <input
                   type="number"
                   step="any"
                   value={dose}
-                  onChange={e => setDose(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-semibold focus:outline-none focus:border-blue-500"
+                  onChange={e => updateCalculationsFromDoseAndConc(e.target.value, concentration)}
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-white font-bold focus:outline-none"
                   required
                 />
               </div>
 
+              {/* 2. Concentração */}
               <div className="space-y-1">
-                <label className="text-[11px] text-slate-400">Concentração</label>
+                <label className="text-[11px] font-medium text-slate-400 truncate block">
+                  Concentração ({currentCompound.unit}/mL)
+                </label>
                 <input
                   type="number"
                   step="any"
                   value={concentration}
-                  onChange={e => setConcentration(e.target.value)}
+                  onChange={e => updateCalculationsFromDoseAndConc(dose, e.target.value)}
                   placeholder="ex: 200"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
                 />
               </div>
 
+              {/* 3. Volume em mL */}
               <div className="space-y-1">
-                <label className="text-[11px] text-slate-400">Volume (mL)</label>
+                <label className="text-[11px] font-medium text-slate-400">
+                  Volume (mL)
+                </label>
                 <input
-                  type="text"
+                  type="number"
+                  step="any"
                   value={volumeMl}
-                  readOnly
-                  className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-blue-300 font-bold focus:outline-none"
+                  onChange={e => handleVolumeMlChange(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-blue-300 font-bold focus:outline-none"
+                />
+              </div>
+
+              {/* 4. Seringa em UI (Destaque Principal) */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                  <Syringe className="w-3 h-3" />
+                  Seringa (UI)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={volumeUnits}
+                  onChange={e => handleUnitsChange(e.target.value)}
+                  placeholder="ex: 25"
+                  className="w-full bg-emerald-950/40 border border-emerald-500/50 focus:border-emerald-400 rounded-xl px-3 py-2 text-sm text-emerald-300 font-extrabold focus:outline-none ring-1 ring-emerald-500/30"
                 />
               </div>
             </div>
+
+            {/* Live Needle Gauge Tip Banner */}
+            {parseFloat(volumeUnits) > 0 && (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-cyan-950/50 border border-emerald-500/30 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-slate-300">
+                    Puxe o êmbolo até a linha de <strong className="text-emerald-300 text-sm font-black">{volumeUnits} UI</strong> na seringa (U-100)
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono font-semibold">
+                  = {volumeMl} mL
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Date & Time */}

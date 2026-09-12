@@ -171,8 +171,8 @@ export const InjectionList: React.FC<InjectionListProps> = ({
                         {inj.dose} {comp?.unit || 'mg'}
                       </span>
                       {inj.volumeMl && (
-                        <span className="text-[11px] text-slate-400">
-                          ({inj.volumeMl} mL)
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          ({inj.volumeMl} mL • <strong className="text-emerald-400 font-semibold">{Math.round(inj.volumeMl * 100 * 10) / 10} UI</strong>)
                         </span>
                       )}
                       <span className="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 text-slate-300">
