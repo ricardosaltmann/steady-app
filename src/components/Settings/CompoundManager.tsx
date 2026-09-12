@@ -64,7 +64,7 @@ export const CompoundManager: React.FC<CompoundManagerProps> = ({
         <SlidersHorizontal className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <p className="font-semibold text-white">
-            Personalize sua Farmácia & Compostos Ativos (Estilo Shotsy)
+            Personalize sua Farmácia & Compostos Ativos
           </p>
           <p className="text-slate-400 text-[11px] leading-relaxed">
             Ative apenas os compostos que você utiliza ou quer acompanhar. Os compostos desativados ficarão ocultos nos seletores de aplicação e gráficos diários para manter sua interface limpa e focada.
@@ -234,7 +234,7 @@ export const CompoundManager: React.FC<CompoundManagerProps> = ({
                 </div>
               </div>
 
-              {/* iOS / Shotsy Style Toggle Switch */}
+              {/* Toggle Switch */}
               <button
                 type="button"
                 role="switch"

@@ -249,7 +249,7 @@ export function App() {
     }
   };
 
-  // Only compounds that are enabled are shown in daily dropdowns & selectors (Shotsy style)
+  // Only compounds that are enabled are shown in daily dropdowns & selectors
   const enabledCompounds = useMemo(() => {
     const list = compounds.filter(c => c.enabled !== false);
     return list.length > 0 ? list : compounds;

@@ -6,6 +6,7 @@ export type CompoundCategory =
   | 'other';
 
 export type InjectionSite = 
+  // Locais Intramusculares (IM)
   | 'deltoid_left' 
   | 'deltoid_right' 
   | 'ventroglute_left' 
@@ -14,6 +15,14 @@ export type InjectionSite =
   | 'glute_right' 
   | 'quad_left' 
   | 'quad_right' 
+  // Locais Subcutâneos (SubQ)
+  | 'abdomen_upper'
+  | 'abdomen_center'
+  | 'abdomen_lower'
+  | 'arm_left'
+  | 'arm_right'
+  | 'leg_left'
+  | 'leg_right'
   | 'abdomen_subq_left' 
   | 'abdomen_subq_right' 
   | 'love_handles_left' 
@@ -37,7 +46,7 @@ export interface Compound {
     max: number;
     unit: string;
   };
-  enabled?: boolean;        // Se está ativo para exibição nas listas e seletores diários (estilo Shotsy)
+  enabled?: boolean;        // Se está ativo para exibição nas listas e seletores diários
 }
 
 export interface Injection {

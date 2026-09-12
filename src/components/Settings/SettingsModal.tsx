@@ -167,7 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Tab 1: Compound Manager (Shotsy style) */}
+        {/* Tab 1: Compound Manager */}
         {activeTab === 'compounds' && !showAddCompound && (
           <CompoundManager
             compounds={compounds}

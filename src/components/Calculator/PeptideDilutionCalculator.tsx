@@ -160,7 +160,7 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 Calculadora de Diluição & Reconstituição
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60 uppercase">
-                  Cellgenic & Shotsy Style
+                  Precisão Clínica (UI)
                 </span>
               </h2>
               <p className="text-xs text-slate-400">

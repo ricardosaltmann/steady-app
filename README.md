@@ -1,4 +1,4 @@
-﻿# Steady Protocol Tracker 💉✨
+# Steady Protocol Tracker 💉✨
 
 > **Plataforma avançada para farmacocinética, monitoramento e gestão clínica de reposição hormonal (TRT/HRT), peptídeos regenerativos e agonistas GLP-1.**
 
@@ -19,7 +19,7 @@
    - **Peptídeos & GLP-1**: Tirzepatida (Mounjaro), Semaglutida (Ozempic), Retatrutida, BPC-157, TB-500, CJC-1295 + Ipamorelina, GHK-Cu, KPV, e blends combinados (**GLOW Protocol**, **KLOW Protocol**, **Wolverine Blend**).
    - **Fertilidade & TPC**: hCG (Choriomon/Ovidrel), Clomid, Tamoxifeno, Anastrozol, Cabergolina.
    - **Hormônios Femininos (HRT)**: Estradiol (Valerato/Cipionato), Progesterona bioidêntica.
-   - **Gestão de Compostos estilo Shotsy**: Ativação/desativação individual ou por categoria com filtros dinâmicos no cabeçalho.
+   - **Gestão Inteligente de Farmácia**: Ativação/desativação individual ou por categoria com filtros dinâmicos no cabeçalho.
 
 3. **Calculadora de Diluição & Reconstituição (Modelo Cellgenic)**:
    - Cálculo automático de diluição com água bacteriostática.

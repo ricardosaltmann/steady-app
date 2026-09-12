@@ -227,7 +227,7 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {/* 1. Dose */}
               <div className="space-y-1">
                 <label className="text-[11px] font-medium text-slate-400">
@@ -258,24 +258,10 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
                 />
               </div>
 
-              {/* 3. Volume em mL */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-400">
-                  Volume (mL)
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  value={volumeMl}
-                  onChange={e => handleVolumeMlChange(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 focus:border-blue-500 rounded-xl px-3 py-2 text-sm text-blue-300 font-bold focus:outline-none"
-                />
-              </div>
-
-              {/* 4. Seringa em UI (Destaque Principal) */}
+              {/* 3. Seringa em UI (Destaque Principal) */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                  <Syringe className="w-3 h-3" />
+                  <Syringe className="w-3.5 h-3.5" />
                   Seringa (UI)
                 </label>
                 <input
@@ -291,15 +277,10 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
 
             {/* Live Needle Gauge Tip Banner */}
             {parseFloat(volumeUnits) > 0 && (
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-cyan-950/50 border border-emerald-500/30 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-slate-300">
-                    Puxe o êmbolo até a linha de <strong className="text-emerald-300 text-sm font-black">{volumeUnits} UI</strong> na seringa (U-100)
-                  </span>
-                </div>
-                <span className="text-[11px] text-slate-400 font-mono font-semibold">
-                  = {volumeMl} mL
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-cyan-950/50 border border-emerald-500/30 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="text-slate-300">
+                  Puxe o êmbolo até a linha de <strong className="text-emerald-300 text-sm font-black">{volumeUnits} UI</strong> na seringa (U-100)
                 </span>
               </div>
             )}
@@ -346,7 +327,14 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setRoute(r)}
+                  onClick={() => {
+                    setRoute(r);
+                    if (r === 'SubQ') {
+                      setSite('abdomen_center');
+                    } else {
+                      setSite('deltoid_right');
+                    }
+                  }}
                   className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
                     route === r
                       ? 'bg-blue-600/30 border-blue-500 text-white shadow-sm'
@@ -368,6 +356,7 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
               selectedSite={site}
               onSelectSite={setSite}
               lastUsedSite={lastUsedSite}
+              route={route}
             />
           </div>
 

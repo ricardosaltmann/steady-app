@@ -1,7 +1,7 @@
 {
   "short_name": "Steady",
-  "name": "Steady - Farmacocinética de Esteroides & Peptídeos",
-  "description": "Acompanhamento farmacocinético de TRT, esteroides anabolizantes e peptídeos no estilo Shotsy.",
+  "name": "Steady - Protocol Tracker",
+  "description": "Acompanhamento farmacocinético avançado de TRT, esteroides e peptídeos.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#070a12",
