@@ -37,6 +37,8 @@ export interface Compound {
   halfLifeDays: number;     // Meia-vida em dias
   peakHours: number;        // Horas até o pico de concentração (Tmax)
   defaultConcentrationMgMl?: number; // Concentração típica (mg/mL ou mcg/mL)
+  vialMg?: number;          // Força do frasco em mg para reconstituição de peptídeos (ex: 20)
+  waterMl?: number;         // Água bacteriostática padrão em mL (ex: 2.6)
   color: string;            // Cor de identificação
   unit: 'mg' | 'mcg' | 'IU';
   bioavailability?: number; // 0.0 - 1.0 (padrão 1.0)
@@ -83,6 +85,10 @@ export interface Protocol {
   startDate: string;
   active: boolean;
   notes?: string;
+  vialMg?: number;            // Força do frasco do peptídeo (ex: 20mg)
+  waterMl?: number;           // Água bacteriostática adicionada (ex: 2.6mL)
+  concentrationMgMl?: number; // Concentração resultante em mg/mL (ex: 7.69)
+  syringeUnits?: number;      // Unidades na seringa U-100 (ex: 32.5 UI)
 }
 
 export interface LabMarker {

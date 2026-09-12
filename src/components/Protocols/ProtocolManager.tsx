@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Protocol, Compound, ProtocolFrequency } from '../../types';
-import { Calendar, Plus, CheckCircle2, Clock, Trash2, Edit3, ShieldAlert, Sparkles } from 'lucide-react';
+import { Calendar, Plus, CheckCircle2, Clock, Trash2, Edit3, ShieldAlert, Sparkles, Droplets, Syringe } from 'lucide-react';
 
 interface ProtocolManagerProps {
   protocols: Protocol[];
@@ -32,12 +32,43 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
 
+  // Reconstitution states for peptides
+  const [vialMg, setVialMg] = useState<string>('20');
+  const [waterMl, setWaterMl] = useState<string>('2.6');
+
+  const selectedComp = compounds.find(c => c.id === compoundId) || compounds[0];
+  const isPeptide = selectedComp?.category === 'peptide';
+
+  const handleCompoundChange = (newCompId: string) => {
+    setCompoundId(newCompId);
+    const comp = compounds.find(c => c.id === newCompId);
+    if (comp?.category === 'peptide') {
+      setRoute('SubQ');
+      if (dose === '50') setDose('2.5');
+      setVialMg(String(comp.vialMg || 20));
+      setWaterMl(String(comp.waterMl || 2.6));
+    } else {
+      if (dose === '2.5') setDose('50');
+    }
+  };
+
   const openNewModal = () => {
     setEditingProtocol(null);
     setName('');
-    setCompoundId(compounds[0]?.id || '');
-    setDose('50');
-    setRoute('IM');
+    const firstComp = compounds[0];
+    const firstCompId = firstComp?.id || '';
+    setCompoundId(firstCompId);
+    if (firstComp?.category === 'peptide') {
+      setDose('2.5');
+      setRoute('SubQ');
+      setVialMg(String(firstComp.vialMg || 20));
+      setWaterMl(String(firstComp.waterMl || 2.6));
+    } else {
+      setDose('50');
+      setRoute('IM');
+      setVialMg('20');
+      setWaterMl('2.6');
+    }
     setFrequency('every_3_5_days');
     setIntervalDays('3.5');
     setStartDate(new Date().toISOString().slice(0, 10));
@@ -55,6 +86,8 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     setIntervalDays(String(p.intervalDays || 3.5));
     setStartDate(p.startDate);
     setNotes(p.notes || '');
+    setVialMg(String(p.vialMg || 20));
+    setWaterMl(String(p.waterMl || 2.6));
     setIsModalOpen(true);
   };
 
@@ -62,6 +95,16 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     e.preventDefault();
     const parsedDose = parseFloat(dose);
     if (isNaN(parsedDose) || parsedDose <= 0) return;
+
+    const numVialMg = parseFloat(vialMg) || undefined;
+    const numWaterMl = parseFloat(waterMl) || undefined;
+    let concentrationMgMl: number | undefined = undefined;
+    let syringeUnits: number | undefined = undefined;
+
+    if (numVialMg && numWaterMl && numWaterMl > 0) {
+      concentrationMgMl = Number((numVialMg / numWaterMl).toFixed(2));
+      syringeUnits = Number(((parsedDose / concentrationMgMl) * 100).toFixed(1));
+    }
 
     const protocolToSave: Protocol = {
       id: editingProtocol ? editingProtocol.id : 'proto_' + Date.now(),
@@ -74,6 +117,10 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
       startDate,
       active: editingProtocol ? editingProtocol.active : true,
       notes: notes.trim() || undefined,
+      vialMg: isPeptide ? numVialMg : undefined,
+      waterMl: isPeptide ? numWaterMl : undefined,
+      concentrationMgMl: isPeptide ? concentrationMgMl : undefined,
+      syringeUnits: isPeptide ? syringeUnits : undefined,
     };
 
     onSaveProtocol(protocolToSave);
@@ -210,6 +257,19 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                     <span>{frequencyLabels[p.frequency]}</span>
                   </div>
 
+                  {p.vialMg && p.waterMl && (
+                    <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-xs flex items-center justify-between">
+                      <span className="text-slate-300 flex items-center gap-1.5">
+                        <Droplets className="w-3.5 h-3.5 text-cyan-400" />
+                        Frasco {p.vialMg}mg em {p.waterMl}mL
+                      </span>
+                      <span className="font-bold text-emerald-400 flex items-center gap-1">
+                        <Syringe className="w-3.5 h-3.5" />
+                        {p.syringeUnits || ((p.dose / (p.vialMg / p.waterMl)) * 100).toFixed(1)} UI
+                      </span>
+                    </div>
+                  )}
+
                   {p.notes && (
                     <p className="text-xs text-slate-400 italic mt-2">
                       "{p.notes}"
@@ -276,7 +336,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                 <label className="text-xs font-semibold text-slate-300">Composto</label>
                 <select
                   value={compoundId}
-                  onChange={e => setCompoundId(e.target.value)}
+                  onChange={e => handleCompoundChange(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                 >
                   <optgroup label="💉 ESTEROIDES & TRT">
@@ -309,6 +369,103 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                   </optgroup>
                 </select>
               </div>
+
+              {/* Seção de Reconstituição e Diluição para Peptídeos */}
+              {isPeptide && (
+                <div className="bg-slate-950/80 border border-emerald-500/30 rounded-2xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                      <Droplets className="w-3.5 h-3.5" />
+                      Parâmetros de Diluição do Peptídeo
+                    </span>
+                    <span className="text-[10px] text-slate-400">Padrão Clínico</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-slate-300 flex items-center justify-between">
+                        <span>Peptídeo no Frasco</span>
+                        <span className="text-emerald-400 font-bold text-[10px]">em mg</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={vialMg}
+                        onChange={e => setVialMg(e.target.value)}
+                        placeholder="ex: 20"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-emerald-500"
+                        required
+                      />
+                      <div className="flex gap-1 pt-0.5">
+                        {['5', '10', '20'].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setVialMg(val)}
+                            className={`flex-1 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                              vialMg === val
+                                ? 'bg-emerald-600 border-emerald-500 text-white'
+                                : 'bg-slate-900 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {val}mg
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-slate-300 flex items-center justify-between">
+                        <span>Água Bacteriostática</span>
+                        <span className="text-cyan-400 font-bold text-[10px]">em mL</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={waterMl}
+                        onChange={e => setWaterMl(e.target.value)}
+                        placeholder="ex: 2.6"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-cyan-500"
+                        required
+                      />
+                      <div className="flex gap-1 pt-0.5">
+                        {['1.0', '2.0', '2.6', '3.0'].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setWaterMl(val)}
+                            className={`flex-1 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                              waterMl === val
+                                ? 'bg-cyan-600 border-cyan-500 text-white'
+                                : 'bg-slate-900 border-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {val}mL
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Concentração e UI calculadas */}
+                  {parseFloat(vialMg) > 0 && parseFloat(waterMl) > 0 && (
+                    <div className="p-2.5 rounded-xl bg-slate-900/90 border border-emerald-900/40 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Concentração Resultante:</span>
+                        <strong className="text-slate-200">
+                          {(parseFloat(vialMg) / parseFloat(waterMl)).toFixed(2)} mg/mL
+                        </strong>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block">Seringa (U-100):</span>
+                        <strong className="text-emerald-400 text-sm">
+                          {((parseFloat(dose) / (parseFloat(vialMg) / parseFloat(waterMl))) * 100).toFixed(1)} UI
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">

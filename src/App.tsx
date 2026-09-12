@@ -31,6 +31,7 @@ export function App() {
 
   const [currentTab, setCurrentTab] = useState<NavTab>('chart');
   const [isInjectionModalOpen, setIsInjectionModalOpen] = useState(false);
+  const [quickLogProtocol, setQuickLogProtocol] = useState<Protocol | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
 
@@ -173,6 +174,7 @@ export function App() {
 
   const handleQuickLogFromProtocol = (protocol: Protocol) => {
     setSelectedCompoundId(protocol.compoundId);
+    setQuickLogProtocol(protocol);
     setIsInjectionModalOpen(true);
   };
 
@@ -446,13 +448,19 @@ export function App() {
       {enabledCompounds.length > 0 && (
         <InjectionModal
           isOpen={isInjectionModalOpen}
-          onClose={() => setIsInjectionModalOpen(false)}
+          onClose={() => {
+            setIsInjectionModalOpen(false);
+            setQuickLogProtocol(null);
+          }}
           compounds={enabledCompounds}
           defaultCompoundId={selectedCompoundId}
           onSaveInjection={handleSaveInjection}
           lastUsedSite={lastUsedSite}
+          protocols={protocols}
+          selectedProtocol={quickLogProtocol}
           onOpenDilutionCalculator={() => {
             setIsInjectionModalOpen(false);
+            setQuickLogProtocol(null);
             setCurrentTab('calc');
           }}
         />

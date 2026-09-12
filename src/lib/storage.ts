@@ -143,7 +143,11 @@ export function getInitialDemoData() {
       frequency: 'weekly',
       startDate: daysAgo(21).slice(0, 10),
       active: true,
-      notes: 'Aplicação todo domingo à noite.',
+      vialMg: 20,
+      waterMl: 2.6,
+      concentrationMgMl: 7.69,
+      syringeUnits: 32.5,
+      notes: 'Aplicação semanal de 2.5mg (32.5 UI na seringa U-100). Frasco 20mg / 2.6mL.',
     },
   ];
 
@@ -235,6 +239,8 @@ export const storage = {
             ...c,
             name: def.name,
             defaultConcentrationMgMl: def.defaultConcentrationMgMl,
+            vialMg: def.vialMg,
+            waterMl: def.waterMl,
             description: def.description,
           };
         }
