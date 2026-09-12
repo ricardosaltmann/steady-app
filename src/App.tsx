@@ -439,6 +439,9 @@ export function App() {
             />
           </div>
         )}
+
+        {/* Espaçador de segurança para nunca sobrepor a barra inferior fixa */}
+        <div className="h-32 sm:h-40 w-full shrink-0 pointer-events-none" aria-hidden="true" />
       </main>
 
       {/* Bottom Navigation */}
