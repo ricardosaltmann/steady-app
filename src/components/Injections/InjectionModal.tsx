@@ -95,6 +95,7 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
       if (currentCompound.category === 'peptide') {
         const defaultPeptideDose = '2.5';
         setRoute('SubQ');
+        setSite('abdomen_center');
         setNeedleInfo('31G 5/16"');
         updateCalculationsFromDoseAndConc(defaultPeptideDose, defaultConc);
       } else if (currentCompound.category === 'fertility') {
@@ -282,6 +283,13 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
                 <span className="text-slate-300">
                   Puxe o êmbolo até a linha de <strong className="text-emerald-300 text-sm font-black">{volumeUnits} UI</strong> na seringa (U-100)
                 </span>
+              </div>
+            )}
+
+            {currentCompound.category === 'peptide' && (
+              <div className="text-[11px] text-emerald-400/90 bg-emerald-950/30 border border-emerald-900/50 rounded-xl px-3 py-1.5 flex items-center justify-between">
+                <span>Padrão Clínico: Frasco 20mg em 2.6mL (7.69 mg/mL)</span>
+                <span className="font-bold">2.5mg = 32.5 UI</span>
               </div>
             )}
           </div>

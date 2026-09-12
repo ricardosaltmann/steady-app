@@ -87,7 +87,7 @@ export function getInitialDemoData() {
       compoundId: 'tirzepatide',
       date: daysAgo(14, 20),
       dose: 2.5,
-      volumeMl: 0.25,
+      volumeMl: 0.325,
       site: 'abdomen_subq_right',
       route: 'SubQ',
       notes: 'Semana 1 de adaptação.',
@@ -99,7 +99,7 @@ export function getInitialDemoData() {
       compoundId: 'tirzepatide',
       date: daysAgo(7, 20),
       dose: 2.5,
-      volumeMl: 0.25,
+      volumeMl: 0.325,
       site: 'abdomen_subq_left',
       route: 'SubQ',
       notes: 'Semana 2, controle de apetite excelente.',
@@ -226,12 +226,28 @@ export const storage = {
       const stored = JSON.parse(raw) as Compound[];
       const storedIds = new Set(stored.map(c => c.id));
       const missingDefaults = DEFAULT_COMPOUNDS.filter(d => !storedIds.has(d.id));
+      
+      // Keep default parameters synced (e.g. tirzepatide / retatrutide 20mg / 2.6mL)
+      const synced = stored.map(c => {
+        const def = DEFAULT_COMPOUNDS.find(d => d.id === c.id);
+        if (def && (c.id === 'tirzepatide' || c.id === 'retatrutide' || c.id === 'semaglutide')) {
+          return {
+            ...c,
+            name: def.name,
+            defaultConcentrationMgMl: def.defaultConcentrationMgMl,
+            description: def.description,
+          };
+        }
+        return c;
+      });
+
       if (missingDefaults.length > 0) {
-        const merged = [...stored, ...missingDefaults];
+        const merged = [...synced, ...missingDefaults];
         localStorage.setItem(key, JSON.stringify(merged));
         return merged;
       }
-      return stored;
+      localStorage.setItem(key, JSON.stringify(synced));
+      return synced;
     } catch {
       return DEFAULT_COMPOUNDS;
     }

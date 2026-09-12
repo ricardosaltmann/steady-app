@@ -12,68 +12,76 @@ interface ReconstitutionPreset {
 
 const PRESETS: ReconstitutionPreset[] = [
   {
+    id: 'tirzepatide',
+    name: 'Tirzepatida (20mg / 2.6mL)',
+    vialMg: 20,
+    waterMl: 2.6,
+    defaultDoseMcg: 2500, // 2.5mg
+    description: 'Padrão clínico: Frasco de 20mg diluído em 2.6mL (7.69 mg/mL). Dose padrão inicial de 2.5mg (32.5 UI na seringa U-100). Rendimento de 8 doses.',
+  },
+  {
+    id: 'retatrutide',
+    name: 'Retatrutida (20mg / 2.6mL)',
+    vialMg: 20,
+    waterMl: 2.6,
+    defaultDoseMcg: 2500, // 2.5mg
+    description: 'Padrão clínico: Frasco de 20mg diluído em 2.6mL (7.69 mg/mL). Dose padrão inicial de 2.5mg (32.5 UI na seringa U-100). Rendimento de 8 doses.',
+  },
+  {
     id: 'bpc157',
     name: 'BPC-157 (5mg)',
     vialMg: 5,
-    waterMl: 2.0,
+    waterMl: 2.6,
     defaultDoseMcg: 250,
-    description: 'Dose padrão de 250mcg a 500mcg 1x a 2x ao dia para reparação tecidual.',
-  },
-  {
-    id: 'tirzepatide',
-    name: 'Tirzepatida (10mg)',
-    vialMg: 10,
-    waterMl: 2.0,
-    defaultDoseMcg: 2500, // 2.5mg
-    description: 'Dose inicial de adaptação: 2.5mg (2500mcg) por semana.',
+    description: 'Frasco de 5mg diluído no padrão de 2.6mL. Dose de 250mcg a 500mcg 1x a 2x ao dia.',
   },
   {
     id: 'semaglutide',
     name: 'Semaglutida (5mg)',
     vialMg: 5,
-    waterMl: 2.0,
+    waterMl: 2.6,
     defaultDoseMcg: 250, // 0.25mg
-    description: 'Dose inicial de 0.25mg (250mcg) por semana nas primeiras 4 semanas.',
+    description: 'Frasco de 5mg diluído no padrão de 2.6mL. Dose inicial de 0.25mg (250mcg / 13 UI) por semana.',
   },
   {
     id: 'cjc_ipa',
-    name: 'CJC-1295 + Ipamorelina (10mg total)',
+    name: 'CJC-1295 + Ipamorelina (10mg)',
     vialMg: 10,
-    waterMl: 2.0,
+    waterMl: 2.6,
     defaultDoseMcg: 200, // 200mcg
-    description: 'Dose noturna antes de dormir: 100mcg a 300mcg para pico de GH.',
+    description: 'Frasco de 10mg diluído no padrão de 2.6mL. Dose noturna de 200mcg.',
   },
   {
     id: 'tb500',
     name: 'TB-500 (5mg)',
     vialMg: 5,
-    waterMl: 2.0,
+    waterMl: 2.6,
     defaultDoseMcg: 2500, // 2.5mg
-    description: '2.5mg 2x por semana em fase de ataque.',
+    description: 'Frasco de 5mg diluído no padrão de 2.6mL. Dose de 2.5mg 2x por semana.',
   },
   {
     id: 'glow',
-    name: 'GLOW Protocol (70mg total)',
+    name: 'GLOW Protocol (70mg)',
     vialMg: 70,
-    waterMl: 3.0,
+    waterMl: 2.6,
     defaultDoseMcg: 2300,
-    description: 'Blend de GHK-Cu + BPC + TB para síntese de colágeno e pele.',
+    description: 'Blend de GHK-Cu + BPC + TB diluído no padrão de 2.6mL.',
   },
   {
     id: 'klow',
-    name: 'KLOW Protocol (75mg total)',
+    name: 'KLOW Protocol (75mg)',
     vialMg: 75,
-    waterMl: 3.0,
+    waterMl: 2.6,
     defaultDoseMcg: 2500,
-    description: 'Adiciona KPV ao Glow para potente ação anti-inflamatória e clareamento.',
+    description: 'Blend KLOW com KPV diluído no padrão de 2.6mL.',
   },
   {
     id: 'ghkcu',
     name: 'GHK-Cu Puro (50mg)',
     vialMg: 50,
-    waterMl: 3.0,
+    waterMl: 2.6,
     defaultDoseMcg: 1500,
-    description: '1.5mg a 2mg diários subcutâneo para rejuvenescimento.',
+    description: 'GHK-Cu diluído no padrão de 2.6mL. Dose de 1.5mg a 2mg diários.',
   },
 ];
 
@@ -84,11 +92,11 @@ interface PeptideDilutionCalculatorProps {
 export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps> = ({
   onApplyCalculatedDose,
 }) => {
-  // Inputs
-  const [vialMg, setVialMg] = useState<string>('5');
-  const [waterMl, setWaterMl] = useState<string>('2');
-  const [doseUnit, setDoseUnit] = useState<'mcg' | 'mg'>('mcg');
-  const [desiredDose, setDesiredDose] = useState<string>('250');
+  // Inputs com padrão clínico: Frasco 20mg, Diluição 2.6mL, Dose 2.5mg
+  const [vialMg, setVialMg] = useState<string>('20');
+  const [waterMl, setWaterMl] = useState<string>('2.6');
+  const [doseUnit, setDoseUnit] = useState<'mcg' | 'mg'>('mg');
+  const [desiredDose, setDesiredDose] = useState<string>('2.5');
   const [syringeType, setSyringeType] = useState<100 | 50 | 30>(100); // 100 UI (1ml), 50 UI (0.5ml), 30 UI (0.3ml)
 
   // Apply preset
@@ -121,6 +129,7 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
         totalDosesInVial: 0,
         mcgPerUnit: 0,
         isValid: false,
+        doseInMg: 0,
       };
     }
 
@@ -141,6 +150,7 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
       mcgPerUnit,
       isValid: syringeUnits > 0 && syringeUnits <= syringeType,
       isOverSyringe: syringeUnits > syringeType,
+      doseInMg: Number(doseInMg.toFixed(2)),
     };
   }, [vialMg, waterMl, desiredDose, doseUnit, syringeType]);
 
@@ -217,12 +227,16 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
                 <span className="text-xs text-slate-400 font-semibold px-1">mg</span>
               </div>
               <div className="flex gap-1 pt-1">
-                {['2', '5', '10', '15', '50'].map(val => (
+                {['2', '5', '10', '20', '50'].map(val => (
                   <button
                     key={val}
                     type="button"
                     onClick={() => setVialMg(val)}
-                    className="flex-1 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-300 hover:border-slate-600"
+                    className={`flex-1 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
+                      vialMg === val
+                        ? 'bg-emerald-600 border-emerald-500 text-white'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                    }`}
                   >
                     {val}mg
                   </button>
@@ -242,18 +256,22 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
                   step="0.1"
                   value={waterMl}
                   onChange={e => setWaterMl(e.target.value)}
-                  placeholder="ex: 1, 2, 3"
+                  placeholder="ex: 1, 2, 2.6"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold focus:outline-none focus:border-cyan-500"
                 />
                 <span className="text-xs text-slate-400 font-semibold px-1">mL</span>
               </div>
               <div className="flex gap-1 pt-1">
-                {['1', '2', '2.5', '3', '5'].map(val => (
+                {['1', '2', '2.6', '3', '5'].map(val => (
                   <button
                     key={val}
                     type="button"
                     onClick={() => setWaterMl(val)}
-                    className="flex-1 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-bold text-slate-300 hover:border-slate-600"
+                    className={`flex-1 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
+                      waterMl === val
+                        ? 'bg-cyan-600 border-cyan-500 text-white'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                    }`}
                   >
                     {val}mL
                   </button>
@@ -310,6 +328,22 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
               placeholder={doseUnit === 'mcg' ? 'ex: 250, 500' : 'ex: 2.5, 5'}
               className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-bold focus:outline-none focus:border-emerald-500"
             />
+            <div className="flex gap-1 pt-1">
+              {(doseUnit === 'mg' ? ['1.25', '2.5', '5', '7.5', '10'] : ['250', '500', '1000', '2500']).map(val => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setDesiredDose(val)}
+                  className={`flex-1 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
+                    desiredDose === val
+                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                  }`}
+                >
+                  {val}{doseUnit}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* 4. Seringa de Insulina */}
@@ -433,6 +467,18 @@ export const PeptideDilutionCalculator: React.FC<PeptideDilutionCalculatorProps>
                 </span>
               </div>
             </div>
+
+            {/* Action button to record injection */}
+            {onApplyCalculatedDose && calculations.isValid && (
+              <button
+                type="button"
+                onClick={() => onApplyCalculatedDose(calculations.doseInMg, calculations.volumePerDoseMl)}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all active:scale-98 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                Registrar Dose ({calculations.doseInMg}mg • {calculations.syringeUnits} UI) no Diário
+              </button>
+            )}
           </div>
 
           {/* Instructions & Best Practices */}
