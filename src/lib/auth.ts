@@ -1,4 +1,4 @@
-﻿import { UserAccount } from '../types';
+import { UserAccount } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const AUTH_STORAGE_KEYS = {
@@ -154,6 +154,17 @@ export const auth = {
         }
 
         if (data.user) {
+          try {
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              name: name.trim(),
+              therapeutic_goal: therapeuticGoal,
+              updated_at: new Date().toISOString(),
+            });
+          } catch {
+            // ignore
+          }
+
           const userAccount: UserAccount = {
             id: data.user.id,
             name: name.trim(),
