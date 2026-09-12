@@ -1,4 +1,4 @@
-import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount } from '../types';
+import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, GoogleHealthSyncConfig } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { auth } from './auth';
 
@@ -534,5 +534,30 @@ export const storage = {
     storage.saveSymptoms(demo.symptoms, userId);
     storage.saveProfile(demo.profile, userId);
     storage.setActiveCompoundId('test_cypionate', userId);
+  },
+
+  getGoogleHealthConfig: (userId?: string): GoogleHealthSyncConfig => {
+    const key = getScopedKey('google_health_config', userId);
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      const user = auth.getCurrentUser();
+      const initial: GoogleHealthSyncConfig = {
+        connected: false,
+        email: user?.email || '',
+        provider: 'google_fit',
+        autoSync: true,
+      };
+      return initial;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { connected: false, email: '', provider: 'google_fit', autoSync: true };
+    }
+  },
+
+  saveGoogleHealthConfig: (config: GoogleHealthSyncConfig, userId?: string) => {
+    const key = getScopedKey('google_health_config', userId);
+    localStorage.setItem(key, JSON.stringify(config));
   },
 };

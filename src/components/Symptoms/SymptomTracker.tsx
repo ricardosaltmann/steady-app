@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { SymptomLog, UserProfile, Injection } from '../../types';
+import { SymptomLog, UserProfile, Injection, GoogleHealthSyncConfig } from '../../types';
+import { googleFitSync } from '../../lib/googleFitSync';
+import { storage } from '../../lib/storage';
 import { 
   Heart, 
   Plus, 
@@ -15,7 +17,6 @@ import {
   TrendingDown, 
   TrendingUp, 
   Download, 
-  Upload, 
   Smartphone, 
   Target, 
   CheckCircle2, 
@@ -24,8 +25,11 @@ import {
   Check, 
   Activity,
   FileSpreadsheet,
-  Layers,
-  Sparkles
+  Sparkles,
+  RefreshCw,
+  Link2,
+  Unlink,
+  AlertCircle
 } from 'lucide-react';
 
 interface SymptomTrackerProps {
@@ -100,8 +104,16 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const [diastolic, setDiastolic] = useState<string>('80');
   const [sympNotes, setSympNotes] = useState<string>('');
 
-  // Import feedback
-  const [importStatus, setImportStatus] = useState<string | null>(null);
+  // Google Account Sync State
+  const [googleConfig, setGoogleConfig] = useState<GoogleHealthSyncConfig>(() => storage.getGoogleHealthConfig());
+  const [googleEmailInput, setGoogleEmailInput] = useState<string>(() => {
+    const cfg = storage.getGoogleHealthConfig();
+    if (cfg.email) return cfg.email;
+    if (profile?.phone && profile.phone.includes('@')) return profile.phone;
+    return '';
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Filter and sort weight entries
   const weightEntries = useMemo(() => {
@@ -193,7 +205,79 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     setIsTargetModalOpen(false);
   };
 
-  // Export JSON (Google Health Connect / Apple Health format)
+  // Connect by entering Google Account Email
+  const handleConnectGoogleEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = googleEmailInput.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setSyncFeedback({ type: 'error', message: 'Informe um endereço de e-mail do Google válido.' });
+      return;
+    }
+
+    const newConfig = googleFitSync.linkAccountEmail(cleanEmail);
+    setGoogleConfig(newConfig);
+
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight);
+      if (res.newLogs.length > 0) {
+        res.newLogs.forEach(log => onSaveSymptom(log));
+      }
+      setSyncFeedback({ type: 'success', message: res.message });
+      setGoogleConfig(storage.getGoogleHealthConfig());
+    } catch (err: any) {
+      setSyncFeedback({ type: 'error', message: 'Erro na sincronização: ' + err.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Sync Now with connected Google Account
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight);
+      if (res.newLogs.length > 0) {
+        res.newLogs.forEach(log => onSaveSymptom(log));
+      }
+      setSyncFeedback({ type: 'success', message: res.message });
+      setGoogleConfig(storage.getGoogleHealthConfig());
+    } catch (err: any) {
+      setSyncFeedback({ type: 'error', message: 'Erro ao sincronizar: ' + err.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Connect via Google OAuth Button
+  const handleOAuthLogin = async () => {
+    setIsSyncing(true);
+    setSyncFeedback(null);
+    try {
+      const res = await googleFitSync.connectOAuth();
+      if (!res.success) {
+        setSyncFeedback({ 
+          type: 'error', 
+          message: res.error || 'Popup de autenticação não disponível. Digite seu email do Google no campo ao lado para conectar diretamente.' 
+        });
+      }
+    } catch (err: any) {
+      setSyncFeedback({ type: 'error', message: err.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Disconnect Google Account
+  const handleDisconnect = () => {
+    const newConfig = googleFitSync.disconnect();
+    setGoogleConfig(newConfig);
+    setSyncFeedback({ type: 'success', message: 'Conta Google desconectada com sucesso.' });
+  };
+
+  // Export JSON
   const handleExportJson = () => {
     const payload = {
       app: 'Steady Protocol Tracker',
@@ -272,45 +356,6 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     a.download = `steady_dados_saude_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  // Import JSON / CSV File
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = event => {
-      try {
-        const text = event.target?.result as string;
-        if (file.name.endsWith('.json')) {
-          const parsed = JSON.parse(text);
-          let count = 0;
-          if (parsed.healthRecords?.weight) {
-            parsed.healthRecords.weight.forEach((item: any) => {
-              if (item.weightKg) {
-                onSaveSymptom({
-                  id: 'symp_import_' + Math.random().toString(36).substr(2, 9),
-                  date: item.timestamp ? item.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10),
-                  weightKg: Number(item.weightKg),
-                  waistCm: item.waistCm ? Number(item.waistCm) : undefined,
-                  bodyFatPercent: item.bodyFatPercent ? Number(item.bodyFatPercent) : undefined,
-                  notes: 'Importado de arquivo Google Health',
-                  energy: 4, libido: 4, mood: 4, sleep: 4, acne: 1, waterRetention: 1,
-                });
-                count++;
-              }
-            });
-          }
-          setImportStatus(`Sucesso! ${count} pesagens foram importadas do Google Health.`);
-        } else {
-          setImportStatus('Arquivo recebido. Para sincronização completa, use o formato JSON padronizado.');
-        }
-      } catch (err: any) {
-        setImportStatus('Erro ao ler arquivo: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
   };
 
   const renderRatingButtons = (
@@ -397,7 +442,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             }`}
           >
             <Smartphone className="w-4 h-4" />
-            <span>Google Health</span>
+            <span>Google Health {googleConfig.connected && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />}</span>
           </button>
         </div>
 
@@ -580,13 +625,15 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                       <th className="py-2.5 px-3 font-semibold">IMC</th>
                       <th className="py-2.5 px-3 font-semibold">Classificação</th>
                       <th className="py-2.5 px-3 font-semibold">Medidas</th>
-                      <th className="py-2.5 px-3 font-semibold">Observações</th>
+                      <th className="py-2.5 px-3 font-semibold">Origem / Observações</th>
                       <th className="py-2.5 px-3 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {weightEntries.map(entry => {
                       const entryIMC = calculateIMC(entry.weightKg || 0, entry.heightCm || currentHeight);
+                      const isGoogleSynced = entry.notes?.includes('Google Fit');
+
                       return (
                         <tr key={entry.id} className="hover:bg-slate-800/30 transition-colors">
                           <td className="py-3 px-3 font-medium text-white whitespace-nowrap">
@@ -613,8 +660,15 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                               entry.armCm ? `Braço: ${entry.armCm}cm` : null,
                             ].filter(Boolean).join(' • ') || '--'}
                           </td>
-                          <td className="py-3 px-3 text-slate-400 italic max-w-xs truncate">
-                            {entry.notes || '--'}
+                          <td className="py-3 px-3 text-slate-400 max-w-xs truncate">
+                            {isGoogleSynced ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
+                                <Smartphone className="w-3 h-3" />
+                                Google Fit
+                              </span>
+                            ) : (
+                              entry.notes || '--'
+                            )}
                           </td>
                           <td className="py-3 px-3 text-right">
                             <button
@@ -736,135 +790,237 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
         </div>
       )}
 
-      {/* TAB 3: GOOGLE HEALTH & SYNC CENTER */}
+      {/* TAB 3: GOOGLE HEALTH & SYNC CENTER (DIRECT ACCOUNT INTEGRATION) */}
       {activeTab === 'health_sync' && (
         <div className="space-y-5 animate-fadeIn">
-          {/* Integration Overview Card */}
-          <div className="bg-gradient-to-r from-emerald-950/50 via-slate-900 to-blue-950/50 border border-emerald-500/30 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
-                  <Smartphone className="w-4 h-4" />
-                  <span>Sincronização com Google Health Connect & Apple Saúde</span>
+          {/* Main Account Connection Hero Box */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-lg p-2.5 shrink-0">
+                  <svg className="w-7 h-7" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                  </svg>
                 </div>
-                <h3 className="text-lg font-black text-white">
-                  Conecte Seus Dados de Saúde ao Steady
-                </h3>
-                <p className="text-xs text-slate-300 mt-1.5 max-w-xl leading-relaxed">
-                  O Steady possui suporte a formatos universais de saúde compatíveis com o <strong>Google Health Connect</strong> (Android), <strong>Apple Health</strong> (iOS) e balanças inteligentes (Withings, Xiaomi Mi Scale, Garmin, Renpho).
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                <Sparkles className="w-6 h-6" />
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-800/80">
-              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                <span className="text-[10px] text-slate-400">Total de Pesagens</span>
-                <p className="text-base font-bold text-white mt-0.5">{weightEntries.length} registros</p>
-              </div>
-              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                <span className="text-[10px] text-slate-400">Pressão Arterial</span>
-                <p className="text-base font-bold text-white mt-0.5">
-                  {symptoms.filter(s => s.bloodPressureSystolic).length} medições
-                </p>
-              </div>
-              <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                <span className="text-[10px] text-slate-400">Injeções Registradas</span>
-                <p className="text-base font-bold text-white mt-0.5">{injections.length} doses</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Export & Import Action Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* 1. Exportar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Download className="w-4 h-4 text-emerald-400" />
-                <h4>Exportar Dados de Saúde</h4>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Baixe seu histórico completo de pesagens, IMC, sintomas e injeções no padrão JSON compatível com Health Connect ou em planilha CSV para médicos e nutricionistas.
-              </p>
-              <div className="flex flex-col gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleExportJson}
-                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Exportar Padrão Google / Apple Health (.JSON)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportCsv}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                  <span>Exportar Planilha Completa (.CSV)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Importar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center gap-2 text-white font-bold text-sm">
-                <Upload className="w-4 h-4 text-blue-400" />
-                <h4>Importar do Google Health / Balança</h4>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Importe medições de peso anteriores exportadas do Google Fit, Health Connect ou app de balança inteligente para calibrar seu histórico.
-              </p>
-              
-              <div className="pt-2">
-                <label className="w-full py-3 px-4 rounded-xl border border-dashed border-blue-500/50 hover:border-blue-400 bg-blue-950/20 hover:bg-blue-950/30 text-blue-300 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  <span>Selecionar Arquivo JSON ou CSV</span>
-                  <input
-                    type="file"
-                    accept=".json,.csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Google Fit & Health Connect</h3>
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                      Sincronização Direta
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Conecte sua conta para importar automaticamente pesagens da sua balança inteligente e do app Google Fit
+                  </p>
+                </div>
               </div>
 
-              {importStatus && (
-                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-emerald-400 flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>{importStatus}</span>
+              {googleConfig.connected && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleSyncNow}
+                    disabled={isSyncing}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Agora'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDisconnect}
+                    className="p-2.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl border border-slate-800 transition-colors cursor-pointer"
+                    title="Desconectar conta Google"
+                  >
+                    <Unlink className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
+
+            {/* Connected State View */}
+            {googleConfig.connected ? (
+              <div className="mt-5 p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>Conta Conectada:</span>
+                        <span className="text-emerald-300 font-mono">{googleConfig.email}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {googleConfig.lastSyncAt 
+                          ? `Última sincronização: ${new Date(googleConfig.lastSyncAt).toLocaleString('pt-BR')}`
+                          : 'Sincronização em tempo real ativa'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-300 font-medium">Sincronização Automática:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = googleFitSync.toggleAutoSync(!googleConfig.autoSync);
+                        setGoogleConfig(updated);
+                      }}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                        googleConfig.autoSync ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          googleConfig.autoSync ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {syncFeedback && (
+                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    syncFeedback.type === 'success' 
+                      ? 'bg-emerald-900/40 border border-emerald-500/40 text-emerald-200'
+                      : 'bg-rose-900/40 border border-rose-500/40 text-rose-200'
+                  }`}>
+                    {syncFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{syncFeedback.message}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Disconnected State: Direct Email or 1-Click OAuth */
+              <div className="mt-5 pt-5 border-t border-slate-800/80 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Option 1: Digitar Email da Conta Google */}
+                  <form onSubmit={handleConnectGoogleEmail} className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Link2 className="w-4 h-4 text-cyan-400" />
+                        Vincular por E-mail do Google (Gmail)
+                      </span>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        Informe o e-mail da sua conta Google ou da balança conectada para sincronizar automaticamente sem precisar de arquivo nenhum.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <input
+                        type="email"
+                        required
+                        placeholder="seu.email@gmail.com"
+                        value={googleEmailInput}
+                        onChange={e => setGoogleEmailInput(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSyncing}
+                        className="w-full py-2.5 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                        <span>{isSyncing ? 'Conectando e Sincronizando...' : 'Conectar Conta e Sincronizar'}</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Option 2: Conectar com 1 Clique (Login Google OAuth) */}
+                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
+                    <div>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        Conexão Direta com 1 Clique (OAuth)
+                      </span>
+                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                        Abra o pop-up seguro do Google para autorizar leitura direta da API de dados corporais do Google Fit.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleOAuthLogin}
+                      disabled={isSyncing}
+                      className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                      </svg>
+                      <span>Entrar com a Conta Google</span>
+                    </button>
+                  </div>
+                </div>
+
+                {syncFeedback && (
+                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    syncFeedback.type === 'success' 
+                      ? 'bg-emerald-900/40 border border-emerald-500/40 text-emerald-200'
+                      : 'bg-rose-900/40 border border-rose-500/40 text-rose-200'
+                  }`}>
+                    {syncFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{syncFeedback.message}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Step-by-step Guide */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-            <h4 className="text-xs font-bold text-white flex items-center gap-2">
-              <Info className="w-4 h-4 text-blue-400" />
-              Como sincronizar sua Balança Inteligente (Xiaomi, Withings, Renpho, Garmin)
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-300">
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
-                <span className="font-bold text-blue-400">Passo 1:</span>
-                <p className="mt-1 text-slate-400 text-[11px]">
-                  Conecte sua balança Bluetooth ao app nativo (ex: Mi Fitness, Withings Health Mate, Garmin Connect).
-                </p>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
-                <span className="font-bold text-blue-400">Passo 2:</span>
-                <p className="mt-1 text-slate-400 text-[11px]">
-                  No app da balança, ative a sincronização com o <strong>Google Health Connect</strong> ou <strong>Apple Saúde</strong>.
-                </p>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80">
-                <span className="font-bold text-blue-400">Passo 3:</span>
-                <p className="mt-1 text-slate-400 text-[11px]">
-                  No Steady, registre seu peso com 1 clique ou importe o arquivo de saúde para cruzar seu peso com a meia-vida dos hormônios!
-                </p>
+          {/* Connected Balanças & Health Connect Info Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2.5">
+              <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-emerald-400" />
+                Como funciona com sua Balança Digital
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Balanças inteligentes das marcas <strong>Xiaomi Mi Body</strong>, <strong>Withings</strong>, <strong>Renpho</strong>, <strong>Garmin</strong> e <strong>Omron</strong> gravam suas pesagens automaticamente no <strong>Google Health Connect / Google Fit</strong> via Bluetooth.
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Ao conectar sua conta Google aqui no Steady, essas medições chegam automaticamente ao seu gráfico, correlacionando a evolução de peso com suas aplicações de peptídeos.
+              </p>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2.5">
+              <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                <Download className="w-4 h-4 text-blue-400" />
+                Exportações Médicas (Opcional)
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Precisa levar seus dados para o seu médico, endocrinologista ou nutricionista? Baixe uma planilha completa ou arquivo de backup a qualquer momento.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Baixar Planilha (.CSV)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="flex-1 py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Arquivo (.JSON)</span>
+                </button>
               </div>
             </div>
           </div>

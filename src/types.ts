@@ -172,3 +172,12 @@ export interface AdminStats {
   topCompounds: { compoundId: string; count: number; name: string }[];
 }
 
+export interface GoogleHealthSyncConfig {
+  connected: boolean;
+  email: string;
+  provider: 'google_fit' | 'apple_health' | 'health_connect';
+  lastSyncAt?: string;
+  autoSync: boolean;
+}
+
+
