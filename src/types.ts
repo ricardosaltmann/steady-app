@@ -133,14 +133,21 @@ export interface UserProfile {
   name: string;
   gender: 'male' | 'female' | 'other';
   birthDate?: string;
+  age?: number;
+  phone?: string;
   weightKg?: number;
   goal?: string;
+  selectedCategories?: CompoundCategory[];
 }
 
 export interface UserAccount {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  age?: number;
+  gender?: 'male' | 'female' | 'other';
+  selectedCategories?: CompoundCategory[];
   passwordHash?: string;
   createdAt: string;
   therapeuticGoal: 'male_trt' | 'female_hrt' | 'peptides' | 'peptides_glp1' | 'bodybuilding' | 'fertility' | 'other';

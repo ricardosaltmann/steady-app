@@ -26,10 +26,27 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [categoryFilter, setCategoryFilter] = useState<'all' | CompoundCategory>('all');
 
+  // Only consider compounds where enabled !== false
+  const activeCompounds = compounds.filter(c => c.enabled !== false);
+  const compoundsToDisplay = activeCompounds.length > 0 ? activeCompounds : compounds;
+
+  const hasSteroids = compoundsToDisplay.some(c => c.category === 'steroid');
+  const hasPeptides = compoundsToDisplay.some(c => c.category === 'peptide');
+  const hasFertility = compoundsToDisplay.some(c => c.category === 'fertility');
+  const hasEstrogen = compoundsToDisplay.some(c => c.category === 'estrogen');
+
+  const effectiveFilter = 
+    (categoryFilter === 'steroid' && !hasSteroids) ||
+    (categoryFilter === 'peptide' && !hasPeptides) ||
+    (categoryFilter === 'fertility' && !hasFertility) ||
+    (categoryFilter === 'estrogen' && !hasEstrogen)
+      ? 'all'
+      : categoryFilter;
+
   // Filter compounds shown in the switcher
-  const filteredCompounds = compounds.filter(c => {
-    if (categoryFilter === 'all') return true;
-    return c.category === categoryFilter;
+  const filteredCompounds = compoundsToDisplay.filter(c => {
+    if (effectiveFilter === 'all') return true;
+    return c.category === effectiveFilter;
   });
 
   const selectedCompound = compounds.find(c => c.id === selectedCompoundId);
@@ -117,61 +134,69 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => setCategoryFilter('all')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
-                categoryFilter === 'all'
+                effectiveFilter === 'all'
                   ? 'bg-slate-800 text-white shadow-sm ring-1 ring-slate-700'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Todos ({compounds.length})
+              Todos ({compoundsToDisplay.length})
             </button>
 
-            <button
-              onClick={() => setCategoryFilter('steroid')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
-                categoryFilter === 'steroid'
-                  ? 'bg-blue-600/30 text-blue-300 ring-1 ring-blue-500/50'
-                  : 'text-slate-400 hover:text-blue-300'
-              }`}
-            >
-              <Syringe className="w-3 h-3 text-blue-400" />
-              Esteroides & TRT
-            </button>
+            {hasSteroids && (
+              <button
+                onClick={() => setCategoryFilter('steroid')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
+                  effectiveFilter === 'steroid'
+                    ? 'bg-blue-600/30 text-blue-300 ring-1 ring-blue-500/50'
+                    : 'text-slate-400 hover:text-blue-300'
+                }`}
+              >
+                <Syringe className="w-3 h-3 text-blue-400" />
+                Esteroides & TRT
+              </button>
+            )}
 
-            <button
-              onClick={() => setCategoryFilter('peptide')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
-                categoryFilter === 'peptide'
-                  ? 'bg-emerald-600/30 text-emerald-300 ring-1 ring-emerald-500/50'
-                  : 'text-slate-400 hover:text-emerald-300'
-              }`}
-            >
-              <Sparkles className="w-3 h-3 text-emerald-400" />
-              Peptídeos & GLP-1
-            </button>
+            {hasPeptides && (
+              <button
+                onClick={() => setCategoryFilter('peptide')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
+                  effectiveFilter === 'peptide'
+                    ? 'bg-emerald-600/30 text-emerald-300 ring-1 ring-emerald-500/50'
+                    : 'text-slate-400 hover:text-emerald-300'
+                }`}
+              >
+                <Sparkles className="w-3 h-3 text-emerald-400" />
+                Peptídeos & GLP-1
+              </button>
+            )}
 
-            <button
-              onClick={() => setCategoryFilter('fertility')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
-                categoryFilter === 'fertility'
-                  ? 'bg-amber-600/30 text-amber-300 ring-1 ring-amber-500/50'
-                  : 'text-slate-400 hover:text-amber-300'
-              }`}
-            >
-              <Shield className="w-3 h-3 text-amber-400" />
-              Fertilidade & TPC
-            </button>
+            {hasFertility && (
+              <button
+                onClick={() => setCategoryFilter('fertility')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
+                  effectiveFilter === 'fertility'
+                    ? 'bg-amber-600/30 text-amber-300 ring-1 ring-amber-500/50'
+                    : 'text-slate-400 hover:text-amber-300'
+                }`}
+              >
+                <Shield className="w-3 h-3 text-amber-400" />
+                Fertilidade & TPC
+              </button>
+            )}
 
-            <button
-              onClick={() => setCategoryFilter('estrogen')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
-                categoryFilter === 'estrogen'
-                  ? 'bg-pink-600/30 text-pink-300 ring-1 ring-pink-500/50'
-                  : 'text-slate-400 hover:text-pink-300'
-              }`}
-            >
-              <Heart className="w-3 h-3 text-pink-400" />
-              Feminino
-            </button>
+            {hasEstrogen && (
+              <button
+                onClick={() => setCategoryFilter('estrogen')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
+                  effectiveFilter === 'estrogen'
+                    ? 'bg-pink-600/30 text-pink-300 ring-1 ring-pink-500/50'
+                    : 'text-slate-400 hover:text-pink-300'
+                }`}
+              >
+                <Heart className="w-3 h-3 text-pink-400" />
+                Feminino
+              </button>
+            )}
           </div>
 
           {/* Active Compound Dropdown */}

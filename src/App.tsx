@@ -56,11 +56,16 @@ export function App() {
     setSymptoms(loadedSymptoms);
     setProfile(loadedProfile);
     
-    // Ensure selectedCompoundId exists
-    if (loadedCompounds.some(c => c.id === activeId)) {
-      setSelectedCompoundId(activeId);
-    } else if (loadedCompounds.length > 0) {
-      setSelectedCompoundId(loadedCompounds[0].id);
+    // Ensure selectedCompoundId exists and is an enabled compound
+    const activeComp = loadedCompounds.find(c => c.id === activeId && c.enabled !== false);
+    if (activeComp) {
+      setSelectedCompoundId(activeComp.id);
+    } else {
+      const firstEnabled = loadedCompounds.find(c => c.enabled !== false) || loadedCompounds[0];
+      if (firstEnabled) {
+        setSelectedCompoundId(firstEnabled.id);
+        storage.setActiveCompoundId(firstEnabled.id, uid);
+      }
     }
 
     // 2. Background Cloud Sync from Supabase if active

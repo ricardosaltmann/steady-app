@@ -1,4 +1,4 @@
-import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile } from '../types';
+import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { auth } from './auth';
 
@@ -283,6 +283,51 @@ export const storage = {
     return updated;
   },
 
+  initializeUserPreferences: (
+    userId: string,
+    selectedCategories: CompoundCategory[],
+    gender?: 'male' | 'female' | 'other',
+    phone?: string,
+    age?: number,
+    name?: string,
+    therapeuticGoal?: UserAccount['therapeuticGoal']
+  ): Compound[] => {
+    const cats = selectedCategories && selectedCategories.length > 0
+      ? selectedCategories
+      : (['peptide', 'steroid'] as CompoundCategory[]);
+
+    // Only selected categories have enabled = true. The rest are false.
+    const configuredCompounds = DEFAULT_COMPOUNDS.map(c => ({
+      ...c,
+      enabled: cats.includes(c.category),
+    }));
+
+    storage.saveCompounds(configuredCompounds, userId);
+
+    // Set first enabled compound as active
+    const firstActive = configuredCompounds.find(c => c.enabled !== false);
+    if (firstActive) {
+      storage.setActiveCompoundId(firstActive.id, userId);
+    }
+
+    // Save initial user profile
+    const initialProfile: UserProfile = {
+      name: name || 'Novo Usuário',
+      gender: gender || (therapeuticGoal === 'female_hrt' ? 'female' : 'male'),
+      phone: phone || undefined,
+      age: age ? Number(age) : undefined,
+      selectedCategories: cats,
+      goal: therapeuticGoal === 'peptides_glp1' || therapeuticGoal === 'peptides'
+        ? 'Acompanhamento de Peptídeos e Emagrecimento'
+        : therapeuticGoal === 'female_hrt'
+        ? 'Reposição Hormonal Feminina'
+        : 'Otimização hormonal e farmacocinética',
+    };
+    storage.saveProfile(initialProfile, userId);
+
+    return configuredCompounds;
+  },
+
   getInjections: (userId?: string): Injection[] => {
     const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
     const key = getScopedKey('injections', uid);
@@ -405,7 +450,10 @@ export const storage = {
       }
       const initial: UserProfile = {
         name: user?.name || 'Novo Usuário',
-        gender: user?.therapeuticGoal === 'female_hrt' ? 'female' : 'male',
+        gender: user?.gender || (user?.therapeuticGoal === 'female_hrt' ? 'female' : 'male'),
+        phone: user?.phone,
+        age: user?.age,
+        selectedCategories: user?.selectedCategories,
         goal: 'Acompanhamento farmacocinético de saúde',
       };
       localStorage.setItem(key, JSON.stringify(initial));

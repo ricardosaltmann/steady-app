@@ -48,7 +48,13 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [protocolId, setProtocolId] = useState<string | undefined>(undefined);
 
-  const currentCompound = compounds.find(c => c.id === selectedCompoundId) || compounds[0];
+  const availableCompounds = compounds.filter(c => c.enabled !== false);
+  const compsToUse = availableCompounds.length > 0 ? availableCompounds : compounds;
+  const currentCompound = compsToUse.find(c => c.id === selectedCompoundId) || compsToUse[0] || compounds[0];
+  const steroidComps = compsToUse.filter(c => c.category === 'steroid');
+  const peptideComps = compsToUse.filter(c => c.category === 'peptide');
+  const fertilityComps = compsToUse.filter(c => c.category === 'fertility');
+  const estrogenComps = compsToUse.filter(c => c.category === 'estrogen');
 
   // Helper to sync dose, concentration, mL and UI
   const updateCalculationsFromDoseAndConc = (newDose: string, newConc: string) => {
@@ -244,34 +250,42 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
               onChange={e => setSelectedCompoundId(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500 font-medium"
             >
-              <optgroup label="💉 ESTEROIDES & ANDROGÊNICOS">
-                {compounds.filter(c => c.category === 'steroid').map(comp => (
-                  <option key={comp.id} value={comp.id}>
-                    {comp.name} {comp.subcategory ? `• ${comp.subcategory}` : ''}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🧬 PEPTÍDEOS & AGONISTAS GLP-1">
-                {compounds.filter(c => c.category === 'peptide').map(comp => (
-                  <option key={comp.id} value={comp.id}>
-                    {comp.name} {comp.subcategory ? `• ${comp.subcategory}` : ''}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🛡️ FERTILIDADE, TPC & PROTETORES">
-                {compounds.filter(c => c.category === 'fertility').map(comp => (
-                  <option key={comp.id} value={comp.id}>
-                    {comp.name}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="🌸 HORMÔNIOS FEMININOS / HRT">
-                {compounds.filter(c => c.category === 'estrogen').map(comp => (
-                  <option key={comp.id} value={comp.id}>
-                    {comp.name}
-                  </option>
-                ))}
-              </optgroup>
+              {steroidComps.length > 0 && (
+                <optgroup label="💉 ESTEROIDES & ANDROGÊNICOS">
+                  {steroidComps.map(comp => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.name} {comp.subcategory ? `• ${comp.subcategory}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {peptideComps.length > 0 && (
+                <optgroup label="🧬 PEPTÍDEOS & AGONISTAS GLP-1">
+                  {peptideComps.map(comp => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.name} {comp.subcategory ? `• ${comp.subcategory}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {fertilityComps.length > 0 && (
+                <optgroup label="🛡️ FERTILIDADE, TPC & PROTETORES">
+                  {fertilityComps.map(comp => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {estrogenComps.length > 0 && (
+                <optgroup label="🌸 HORMÔNIOS FEMININOS / HRT">
+                  {estrogenComps.map(comp => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 

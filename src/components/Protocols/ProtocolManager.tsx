@@ -23,8 +23,16 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
   const [editingProtocol, setEditingProtocol] = useState<Protocol | null>(null);
 
   // Form states
+  const availableCompounds = compounds.filter(c => c.enabled !== false);
+  const compsToUse = availableCompounds.length > 0 ? availableCompounds : compounds;
+  const steroidComps = compsToUse.filter(c => c.category === 'steroid');
+  const peptideComps = compsToUse.filter(c => c.category === 'peptide');
+  const fertilityComps = compsToUse.filter(c => c.category === 'fertility');
+  const estrogenComps = compsToUse.filter(c => c.category === 'estrogen');
+
+  const firstEnabledComp = compsToUse[0] || compounds[0];
   const [name, setName] = useState('');
-  const [compoundId, setCompoundId] = useState(compounds[0]?.id || '');
+  const [compoundId, setCompoundId] = useState(firstEnabledComp?.id || '');
   const [dose, setDose] = useState('50');
   const [route, setRoute] = useState<'IM' | 'SubQ' | 'Oral'>('IM');
   const [frequency, setFrequency] = useState<ProtocolFrequency>('every_3_5_days');
@@ -36,7 +44,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
   const [vialMg, setVialMg] = useState<string>('20');
   const [waterMl, setWaterMl] = useState<string>('2.6');
 
-  const selectedComp = compounds.find(c => c.id === compoundId) || compounds[0];
+  const selectedComp = compsToUse.find(c => c.id === compoundId) || compsToUse[0] || compounds[0];
   const isPeptide = selectedComp?.category === 'peptide';
 
   const handleCompoundChange = (newCompId: string) => {
@@ -55,7 +63,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
   const openNewModal = () => {
     setEditingProtocol(null);
     setName('');
-    const firstComp = compounds[0];
+    const firstComp = compsToUse[0] || compounds[0];
     const firstCompId = firstComp?.id || '';
     setCompoundId(firstCompId);
     if (firstComp?.category === 'peptide') {
@@ -339,34 +347,42 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                   onChange={e => handleCompoundChange(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                 >
-                  <optgroup label="💉 ESTEROIDES & TRT">
-                    {compounds.filter(c => c.category === 'steroid').map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.subcategory ? `• ${c.subcategory}` : ''}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🧬 PEPTÍDEOS & GLP-1">
-                    {compounds.filter(c => c.category === 'peptide').map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.subcategory ? `• ${c.subcategory}` : ''}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🛡️ FERTILIDADE & TPC">
-                    {compounds.filter(c => c.category === 'fertility').map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🌸 FEMININO / HRT">
-                    {compounds.filter(c => c.category === 'estrogen').map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </optgroup>
+                  {steroidComps.length > 0 && (
+                    <optgroup label="💉 ESTEROIDES & TRT">
+                      {steroidComps.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.subcategory ? `• ${c.subcategory}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {peptideComps.length > 0 && (
+                    <optgroup label="🧬 PEPTÍDEOS & GLP-1">
+                      {peptideComps.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.subcategory ? `• ${c.subcategory}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {fertilityComps.length > 0 && (
+                    <optgroup label="🛡️ FERTILIDADE & TPC">
+                      {fertilityComps.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {estrogenComps.length > 0 && (
+                    <optgroup label="🌸 FEMININO / HRT">
+                      {estrogenComps.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 

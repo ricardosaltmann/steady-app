@@ -1,4 +1,4 @@
-import { UserAccount } from '../types';
+import { UserAccount, CompoundCategory } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const AUTH_STORAGE_KEYS = {
@@ -12,6 +12,10 @@ const DEMO_USER: UserAccount = {
   id: 'user_demo',
   name: 'Usuário Teste / Atleta TRT',
   email: 'demo@steady.app',
+  phone: '(11) 99999-8888',
+  age: 34,
+  gender: 'male',
+  selectedCategories: ['steroid', 'peptide', 'fertility'],
   passwordHash: 'steady123',
   createdAt: new Date().toISOString(),
   therapeuticGoal: 'male_trt',
@@ -84,8 +88,12 @@ export const auth = {
             id: data.user.id,
             name: profile?.name || data.user.user_metadata?.name || splitEmail(cleanEmail),
             email: cleanEmail,
+            phone: profile?.phone || data.user.user_metadata?.phone,
+            age: profile?.age || data.user.user_metadata?.age,
+            gender: profile?.gender || data.user.user_metadata?.gender || 'male',
+            selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories,
             createdAt: data.user.created_at,
-            therapeuticGoal: profile?.therapeutic_goal || 'male_trt',
+            therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
             isAdmin: Boolean(profile?.is_admin || cleanEmail.startsWith('admin@')),
           };
 
@@ -119,6 +127,10 @@ export const auth = {
     name: string,
     email: string,
     password: string,
+    phone?: string,
+    age?: number,
+    gender: 'male' | 'female' | 'other' = 'male',
+    selectedCategories: CompoundCategory[] = ['peptide', 'steroid'],
     therapeuticGoal: UserAccount['therapeuticGoal'] = 'male_trt'
   ): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
@@ -144,6 +156,10 @@ export const auth = {
           options: {
             data: {
               name: name.trim(),
+              phone: phone?.trim() || null,
+              age: age ? Number(age) : null,
+              gender,
+              selected_categories: selectedCategories,
               therapeutic_goal: therapeuticGoal,
             },
           },
@@ -155,12 +171,26 @@ export const auth = {
 
         if (data.user) {
           try {
-            await supabase.from('profiles').upsert({
+            // Attempt upsert with full profile fields
+            const { error: profileErr } = await supabase.from('profiles').upsert({
               id: data.user.id,
               name: name.trim(),
+              phone: phone?.trim() || null,
+              age: age ? Number(age) : null,
+              gender,
               therapeutic_goal: therapeuticGoal,
               updated_at: new Date().toISOString(),
             });
+
+            if (profileErr) {
+              // Fallback to basic columns if extended columns don't exist yet
+              await supabase.from('profiles').upsert({
+                id: data.user.id,
+                name: name.trim(),
+                therapeutic_goal: therapeuticGoal,
+                updated_at: new Date().toISOString(),
+              });
+            }
           } catch {
             // ignore
           }
@@ -169,6 +199,10 @@ export const auth = {
             id: data.user.id,
             name: name.trim(),
             email: cleanEmail,
+            phone: phone?.trim() || undefined,
+            age: age ? Number(age) : undefined,
+            gender,
+            selectedCategories,
             createdAt: data.user.created_at || new Date().toISOString(),
             therapeuticGoal,
             isAdmin: cleanEmail.startsWith('admin@'),
@@ -193,6 +227,10 @@ export const auth = {
       id: 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       name: name.trim(),
       email: cleanEmail,
+      phone: phone?.trim() || undefined,
+      age: age ? Number(age) : undefined,
+      gender,
+      selectedCategories,
       passwordHash: password,
       createdAt: new Date().toISOString(),
       therapeuticGoal,
