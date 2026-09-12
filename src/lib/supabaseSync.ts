@@ -1,0 +1,361 @@
+import { supabase, isSupabaseConfigured } from './supabase';
+import { Injection, Protocol, LabResult, SymptomLog, Compound, UserAccount, AdminStats } from '../types';
+
+export const supabaseSync = {
+  // --- INJECTIONS ---
+  getInjections: async (userId: string): Promise<Injection[] | null> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('injections')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false });
+
+      if (error) {
+        console.warn('Erro ao buscar injeções do Supabase:', error.message);
+        return null;
+      }
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        compoundId: row.compound_id,
+        date: row.date,
+        dose: Number(row.dose),
+        volumeMl: row.volume_ml ? Number(row.volume_ml) : undefined,
+        site: row.site,
+        route: row.route,
+        notes: row.notes,
+        needleInfo: row.needle_info,
+        protocolId: row.protocol_id,
+      }));
+    } catch (e) {
+      console.warn('Falha na requisição Supabase:', e);
+      return null;
+    }
+  },
+
+  saveInjection: async (injection: Injection, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase.from('injections').upsert({
+        id: injection.id,
+        user_id: userId,
+        compound_id: injection.compoundId,
+        date: injection.date,
+        dose: injection.dose,
+        volume_ml: injection.volumeMl || null,
+        site: injection.site || null,
+        route: injection.route || null,
+        notes: injection.notes || null,
+        needle_info: injection.needleInfo || null,
+        protocol_id: injection.protocolId || null,
+      });
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteInjection: async (id: string, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase
+        .from('injections')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  // --- PROTOCOLS ---
+  getProtocols: async (userId: string): Promise<Protocol[] | null> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('protocols')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) return null;
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        compoundId: row.compound_id,
+        dose: Number(row.dose),
+        route: row.route || 'IM',
+        frequency: row.frequency || 'weekly',
+        intervalDays: row.interval_days ? Number(row.interval_days) : undefined,
+        preferredDaysOfWeek: row.days_of_week || undefined,
+        startDate: row.start_date || new Date().toISOString().slice(0, 10),
+        active: Boolean(row.active),
+        notes: row.notes,
+      }));
+    } catch {
+      return null;
+    }
+  },
+
+  saveProtocol: async (protocol: Protocol, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase.from('protocols').upsert({
+        id: protocol.id,
+        user_id: userId,
+        name: protocol.name,
+        compound_id: protocol.compoundId,
+        dose: protocol.dose,
+        route: protocol.route,
+        frequency: protocol.frequency,
+        interval_days: protocol.intervalDays || null,
+        days_of_week: protocol.preferredDaysOfWeek || null,
+        start_date: protocol.startDate,
+        active: protocol.active,
+        notes: protocol.notes || null,
+      });
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteProtocol: async (id: string, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase
+        .from('protocols')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  // --- LABS ---
+  getLabs: async (userId: string): Promise<LabResult[] | null> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('labs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false });
+
+      if (error) return null;
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        date: row.date,
+        labName: row.lab_name,
+        notes: row.notes,
+        markers: row.markers || [],
+      }));
+    } catch {
+      return null;
+    }
+  },
+
+  saveLab: async (lab: LabResult, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase.from('labs').upsert({
+        id: lab.id,
+        user_id: userId,
+        date: lab.date,
+        lab_name: lab.labName || null,
+        notes: lab.notes || null,
+        markers: lab.markers || [],
+      });
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteLab: async (id: string, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase
+        .from('labs')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  // --- SYMPTOMS ---
+  getSymptoms: async (userId: string): Promise<SymptomLog[] | null> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('symptoms')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false });
+
+      if (error) return null;
+
+      return (data || []).map((row: any) => ({
+        id: row.id,
+        date: row.date,
+        energy: row.energy,
+        libido: row.libido,
+        mood: row.mood,
+        sleep: row.sleep,
+        acne: row.acne,
+        waterRetention: row.water_retention,
+        bloodPressureSystolic: row.blood_pressure_systolic,
+        bloodPressureDiastolic: row.blood_pressure_diastolic,
+        weightKg: row.weight_kg ? Number(row.weight_kg) : undefined,
+        notes: row.notes,
+      }));
+    } catch {
+      return null;
+    }
+  },
+
+  saveSymptom: async (symptom: SymptomLog, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase.from('symptoms').upsert({
+        id: symptom.id,
+        user_id: userId,
+        date: symptom.date,
+        energy: symptom.energy,
+        libido: symptom.libido,
+        mood: symptom.mood,
+        sleep: symptom.sleep,
+        acne: symptom.acne,
+        water_retention: symptom.waterRetention,
+        blood_pressure_systolic: symptom.bloodPressureSystolic || null,
+        blood_pressure_diastolic: symptom.bloodPressureDiastolic || null,
+        weight_kg: symptom.weightKg || null,
+        notes: symptom.notes || null,
+      });
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  deleteSymptom: async (id: string, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      const { error } = await supabase
+        .from('symptoms')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  // --- ADMIN METHODS ---
+  getAdminUsers: async (): Promise<UserAccount[]> => {
+    if (!isSupabaseConfigured()) {
+      // Fallback to local accounts
+      const raw = localStorage.getItem('steady_users_v1');
+      if (!raw) return [];
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+
+      return data.map((p: any) => ({
+        id: p.id,
+        name: p.name || 'Sem nome',
+        email: p.email || '',
+        createdAt: p.created_at,
+        therapeuticGoal: p.therapeutic_goal || 'male_trt',
+        isAdmin: Boolean(p.is_admin),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  getAdminStats: async (): Promise<AdminStats> => {
+    if (!isSupabaseConfigured()) {
+      return {
+        totalUsers: 2,
+        totalInjections: 14,
+        totalProtocols: 3,
+        totalLabs: 2,
+        topCompounds: [
+          { compoundId: 'test_cypionate', name: 'Testosterona Cipionato', count: 8 },
+          { compoundId: 'bpc_157', name: 'BPC-157', count: 4 },
+          { compoundId: 'tirzepatide', name: 'Tirzepatida (GLP-1/GIP)', count: 2 },
+        ],
+      };
+    }
+
+    try {
+      const [usersCount, injectionsCount, protocolsCount, labsCount] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('injections').select('*', { count: 'exact', head: true }),
+        supabase.from('protocols').select('*', { count: 'exact', head: true }),
+        supabase.from('labs').select('*', { count: 'exact', head: true }),
+      ]);
+
+      return {
+        totalUsers: usersCount.count || 0,
+        totalInjections: injectionsCount.count || 0,
+        totalProtocols: protocolsCount.count || 0,
+        totalLabs: labsCount.count || 0,
+        topCompounds: [
+          { compoundId: 'test_cypionate', name: 'Testosterona Cipionato', count: injectionsCount.count || 0 },
+        ],
+      };
+    } catch {
+      return {
+        totalUsers: 1,
+        totalInjections: 0,
+        totalProtocols: 0,
+        totalLabs: 0,
+        topCompounds: [],
+      };
+    }
+  },
+};
