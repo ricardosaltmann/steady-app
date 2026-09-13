@@ -1,31 +1,83 @@
 import React from 'react';
 import { Injection } from '../../types';
 import { INJECTION_SITE_LABELS } from '../../lib/defaultCompounds';
-import { RotateCw, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { RotateCw, MapPin, Sparkles } from 'lucide-react';
 
 interface BodySiteRotationCardProps {
   injections: Injection[];
   onSelectSiteToInject?: (site: string) => void;
 }
 
+const OPPOSITE_SITES: Record<string, string> = {
+  deltoid_right: 'deltoid_left',
+  deltoid_left: 'deltoid_right',
+  ventroglute_right: 'ventroglute_left',
+  ventroglute_left: 'ventroglute_right',
+  glute_right: 'glute_left',
+  glute_left: 'glute_right',
+  quad_right: 'quad_left',
+  quad_left: 'quad_right',
+  abdomen_subq_right: 'abdomen_subq_left',
+  abdomen_subq_left: 'abdomen_subq_right',
+  love_handles_right: 'love_handles_left',
+  love_handles_left: 'love_handles_right',
+  arm_right: 'arm_left',
+  arm_left: 'arm_right',
+  leg_right: 'leg_left',
+  leg_left: 'leg_right',
+  abdomen_upper: 'abdomen_lower',
+  abdomen_lower: 'abdomen_upper',
+  abdomen_center: 'abdomen_subq_right',
+};
+
 export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
   injections,
 }) => {
-  // Get last 4 injections with sites
-  const recentInjections = injections.slice(0, 4);
-  const lastUsedSite = recentInjections[0]?.site;
+  // Sort injections by date descending (most recent first)
+  const sortedInjections = [...injections].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 
-  // Compute site frequencies
-  const siteUsageCounts: Record<string, number> = {};
-  injections.forEach(inj => {
-    siteUsageCounts[inj.site] = (siteUsageCounts[inj.site] || 0) + 1;
-  });
+  const lastUsedSiteKey = sortedInjections[0]?.site;
+  const lastUsedSiteLabel = lastUsedSiteKey 
+    ? INJECTION_SITE_LABELS[lastUsedSiteKey]?.label || lastUsedSiteKey 
+    : null;
+
+  // Determine suggested next site
+  let suggestedSiteKey = lastUsedSiteKey ? OPPOSITE_SITES[lastUsedSiteKey] : null;
+  let suggestedSiteName = suggestedSiteKey 
+    ? INJECTION_SITE_LABELS[suggestedSiteKey]?.label 
+    : null;
+
+  // Intelligent fallback if key not directly in OPPOSITE_SITES
+  if (!suggestedSiteName && lastUsedSiteLabel) {
+    if (lastUsedSiteLabel.includes('Direito')) {
+      suggestedSiteName = lastUsedSiteLabel.replace('Direito', 'Esquerdo');
+    } else if (lastUsedSiteLabel.includes('Direita')) {
+      suggestedSiteName = lastUsedSiteLabel.replace('Direita', 'Esquerda');
+    } else if (lastUsedSiteLabel.includes('Esquerdo')) {
+      suggestedSiteName = lastUsedSiteLabel.replace('Esquerdo', 'Direito');
+    } else if (lastUsedSiteLabel.includes('Esquerda')) {
+      suggestedSiteName = lastUsedSiteLabel.replace('Esquerda', 'Direita');
+    } else {
+      suggestedSiteName = 'Abdômen Esquerdo';
+    }
+  }
+
+  if (!suggestedSiteName) {
+    suggestedSiteName = 'Ventroglúteo Direito ou Abdômen';
+  }
+
+  const rationaleText = lastUsedSiteLabel
+    ? 'Alternância bilateral para descanso do tecido e absorção ideal.'
+    : 'Inicie pelo ventroglúteo ou abdômen para maior conforto e absorção suave.';
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3.5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <RotateCw className="w-4 h-4 text-blue-400" />
+          <RotateCw className="w-4 h-4 text-cyan-400" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
             Guia de Rotação de Locais
           </h3>
@@ -33,13 +85,14 @@ export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
         <span className="text-[11px] text-slate-400">Prevenção de fibrose</span>
       </div>
 
-      <div className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-3">
+      {/* Top box: Último local utilizado */}
+      <div className="p-3.5 bg-slate-950/70 border border-slate-800/80 rounded-2xl flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <span className="text-[10px] uppercase font-semibold text-slate-400">
             Último Local Utilizado
           </span>
           <div className="text-sm font-bold text-white">
-            {lastUsedSite ? INJECTION_SITE_LABELS[lastUsedSite]?.label || lastUsedSite : 'Nenhum registro ainda'}
+            {lastUsedSiteLabel || 'Nenhum registro ainda'}
           </div>
         </div>
 
@@ -53,33 +106,27 @@ export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
         </div>
       </div>
 
-      {recentInjections.length > 0 && (
-        <div className="space-y-1.5 pt-1">
-          <span className="text-[11px] font-medium text-slate-400 block px-1">
-            Sequência recente de rotação:
+      {/* Bottom box: Sugestão do Local da Próxima Aplicação */}
+      <div className="p-3.5 bg-gradient-to-r from-emerald-950/40 via-slate-950/80 to-cyan-950/30 border border-emerald-500/30 rounded-2xl space-y-1.5 shadow-sm relative overflow-hidden">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            Sugestão da Próxima Aplicação
           </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {recentInjections.map((inj, idx) => {
-              const label = INJECTION_SITE_LABELS[inj.site]?.label || inj.site;
-              const dateStr = new Date(inj.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-
-              return (
-                <div
-                  key={inj.id}
-                  className="bg-slate-950/50 border border-slate-800 rounded-xl p-2 text-xs space-y-0.5"
-                >
-                  <div className="text-[10px] text-slate-500 font-mono">
-                    #{idx + 1} ({dateStr})
-                  </div>
-                  <div className="font-semibold text-slate-200 truncate" title={label}>
-                    {label}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <span className="text-[9px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/50 shrink-0">
+            Recomendado
+          </span>
         </div>
-      )}
+
+        <div className="text-base font-extrabold text-white flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>{suggestedSiteName}</span>
+        </div>
+
+        <p className="text-[11px] text-slate-400 leading-tight">
+          {rationaleText}
+        </p>
+      </div>
     </div>
   );
 };
