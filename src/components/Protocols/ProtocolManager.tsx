@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Protocol, Compound, ProtocolFrequency } from '../../types';
-import { Calendar, Plus, CheckCircle2, Clock, Trash2, Edit3, ShieldAlert, Sparkles, Droplets, Syringe } from 'lucide-react';
+import { Calendar, Plus, CheckCircle2, Clock, Trash2, Edit3, ShieldAlert, Sparkles, Droplets, Syringe, X } from 'lucide-react';
 
 interface ProtocolManagerProps {
   protocols: Protocol[];
@@ -323,10 +323,17 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
-            <div className="p-4 sm:p-5 border-b border-slate-800 shrink-0">
+            <div className="p-4 sm:p-5 border-b border-slate-800 shrink-0 flex items-center justify-between">
               <h3 className="text-base font-bold text-white">
                 {editingProtocol ? 'Editar Protocolo' : 'Novo Protocolo Recorrente'}
               </h3>
+              <button
+                type="button"
+                onClick={() => { setIsModalOpen(false); setEditingProtocol(null); }}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">

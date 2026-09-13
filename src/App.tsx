@@ -287,16 +287,18 @@ export function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 pb-28 space-y-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-36 sm:pb-32 space-y-6">
         {/* TAB 1: DASHBOARD & CURVA */}
         {currentTab === 'chart' && activeCompound && (
           <div className="space-y-6 animate-fadeIn">
-            {/* Main Serum Curve */}
+            {/* Main Serum Curve with Multi-Metric Drop List & Weight correlation */}
             <PharmacokineticChart
               compound={activeCompound}
+              compounds={compounds}
               injections={injections}
               protocols={protocols}
               labs={labs}
+              symptoms={symptoms}
               onOpenLogDose={() => setIsInjectionModalOpen(true)}
             />
 

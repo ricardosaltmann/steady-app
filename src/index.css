@@ -55,3 +55,14 @@
   box-shadow: 0 0 25px -5px rgba(168, 85, 247, 0.3);
 }
 
+/* Mobile Safe Area Inset Support */
+.safe-area-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  }
+}
+

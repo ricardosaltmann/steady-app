@@ -90,11 +90,12 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={onOpenNewInjection}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md transition-all active:scale-95 shrink-0"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md transition-all active:scale-95 shrink-0"
               title="Registrar Nova Injeção"
             >
               <Plus className="w-4 h-4" />
-              <span>Registrar Dose</span>
+              <span className="hidden sm:inline">Registrar Dose</span>
+              <span className="sm:hidden font-bold">Dose</span>
             </button>
 
             <button
