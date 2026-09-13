@@ -384,28 +384,62 @@ export const storage = {
     return list;
   },
 
+  getDeletedProtocolIds: (userId?: string): Set<string> => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = getScopedKey('deleted_protocols', uid);
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set<string>();
+    try {
+      const arr = JSON.parse(raw);
+      return new Set<string>(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set<string>();
+    }
+  },
+
+  addDeletedProtocolId: (id: string, userId?: string) => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = getScopedKey('deleted_protocols', uid);
+    const set = storage.getDeletedProtocolIds(uid);
+    set.add(id);
+    localStorage.setItem(key, JSON.stringify(Array.from(set)));
+  },
+
+  removeDeletedProtocolId: (id: string, userId?: string) => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = getScopedKey('deleted_protocols', uid);
+    const set = storage.getDeletedProtocolIds(uid);
+    set.delete(id);
+    localStorage.setItem(key, JSON.stringify(Array.from(set)));
+  },
+
   getProtocols: (userId?: string): Protocol[] => {
     const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
     const key = getScopedKey('protocols', uid);
     const raw = localStorage.getItem(key);
+    const deletedIds = storage.getDeletedProtocolIds(uid);
     if (!raw) {
       if (uid === 'user_demo') {
-        const initial = getInitialDemoData().protocols;
+        const initial = getInitialDemoData().protocols.filter(p => !deletedIds.has(p.id));
         localStorage.setItem(key, JSON.stringify(initial));
         return initial;
       }
       return [];
     }
     try {
-      return JSON.parse(raw);
+      const list: Protocol[] = JSON.parse(raw);
+      return (list || []).filter(p => p && p.id && !deletedIds.has(p.id));
     } catch {
       return [];
     }
   },
 
   saveProtocols: (protocols: Protocol[], userId?: string) => {
-    const key = getScopedKey('protocols', userId);
-    const withTs = (protocols || []).map(p => ({
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = getScopedKey('protocols', uid);
+    const deletedIds = storage.getDeletedProtocolIds(uid);
+    const filtered = (protocols || []).filter(p => p && p.id && !deletedIds.has(p.id));
+    const withTs = filtered.map(p => ({
       ...p,
       updatedAt: p.updatedAt || new Date().toISOString(),
     }));

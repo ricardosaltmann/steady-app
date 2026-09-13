@@ -181,11 +181,26 @@ export function App() {
 
       supabaseSync.getProtocols(uid).then(cloudProtos => {
         if (cloudProtos && cloudProtos.length > 0) {
-          const currentLocal = storage.getProtocols(uid);
-          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudProtos);
-          setProtocols(merged);
-          storage.saveProtocols(merged, uid);
-          itemsToPushToCloud.forEach(p => supabaseSync.saveProtocol(p, uid));
+          const deletedIds = storage.getDeletedProtocolIds(uid);
+
+          // Purgar do Supabase qualquer item retornado que o usuário já tenha excluído
+          const resurrectedInCloud = cloudProtos.filter(p => deletedIds.has(p.id));
+          resurrectedInCloud.forEach(p => {
+            console.log('[Supabase Sync] Purgando protocolo previamente excluído pelo usuário:', p.id);
+            supabaseSync.deleteProtocol(p.id, uid);
+          });
+
+          // Filtra apenas protocolos válidos (não excluídos)
+          const validCloudProtos = cloudProtos.filter(p => !deletedIds.has(p.id));
+          const currentLocal = storage.getProtocols(uid).filter(p => !deletedIds.has(p.id));
+          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, validCloudProtos);
+          const finalMerged = merged.filter(p => !deletedIds.has(p.id));
+
+          setProtocols(finalMerged);
+          storage.saveProtocols(finalMerged, uid);
+          itemsToPushToCloud
+            .filter(p => !deletedIds.has(p.id))
+            .forEach(p => supabaseSync.saveProtocol(p, uid));
         }
       });
 
@@ -339,6 +354,9 @@ export function App() {
 
   // Protocol Handlers
   const handleSaveProtocol = (protocol: Protocol) => {
+    // Se estava registrado como deletado, remove para permitir salvar/recriar
+    storage.removeDeletedProtocolId(protocol.id, currentUser?.id);
+
     const current = [...protocols];
     const index = current.findIndex(p => p.id === protocol.id);
     if (index >= 0) {
@@ -353,13 +371,27 @@ export function App() {
     }
   };
 
-  const handleDeleteProtocol = (id: string) => {
+  const handleDeleteProtocol = async (id: string): Promise<boolean> => {
+    const protocolToDelete = protocols.find(p => p.id === id);
+    const protocolName = protocolToDelete?.name || 'Protocolo';
+
+    // 1. Exclusão Definitiva no Supabase ANTES de atualizar o estado visual
+    if (currentUser?.id && !currentUser.id.startsWith('user_demo') && isSupabaseConfigured()) {
+      const res = await supabaseSync.deleteProtocol(id, currentUser.id);
+      if (!res.success) {
+        alert(`Erro ao excluir o protocolo "${protocolName}" no banco de dados: ${res.error || 'Erro desconhecido'}.\n\nO item NÃO foi removido da tela.`);
+        return false;
+      }
+    }
+
+    // 2. Registrar o ID nos itens excluídos para blindar contra qualquer re-importação futura
+    storage.addDeletedProtocolId(id, currentUser?.id);
+
+    // 3. Atualizar imediatamente o estado visual e o storage local após o sucesso
     const updated = protocols.filter(p => p.id !== id);
     storage.saveProtocols(updated, currentUser?.id);
     setProtocols(updated);
-    if (currentUser?.id) {
-      supabaseSync.deleteProtocol(id, currentUser.id);
-    }
+    return true;
   };
 
   const handleToggleProtocolActive = (id: string) => {

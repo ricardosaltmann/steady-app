@@ -7,7 +7,7 @@ interface ProtocolManagerProps {
   protocols: Protocol[];
   compounds: Compound[];
   onSaveProtocol: (protocol: Protocol) => void;
-  onDeleteProtocol: (id: string) => void;
+  onDeleteProtocol: (id: string) => Promise<boolean | void> | void;
   onToggleActive: (id: string) => void;
   onQuickLogFromProtocol: (protocol: Protocol) => void;
 }
@@ -22,6 +22,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProtocol, setEditingProtocol] = useState<Protocol | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form states
   const availableCompounds = compounds.filter(c => c.enabled !== false);
@@ -355,15 +356,25 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                     </button>
 
                     <button
-                      onClick={() => {
-                        if (confirm(`Excluir o protocolo "${p.name}"?`)) {
-                          onDeleteProtocol(p.id);
+                      disabled={deletingId === p.id}
+                      onClick={async () => {
+                        if (window.confirm(`Deseja realmente excluir o protocolo "${p.name}"? Esta ação é definitiva.`)) {
+                          try {
+                            setDeletingId(p.id);
+                            await onDeleteProtocol(p.id);
+                          } finally {
+                            setDeletingId(null);
+                          }
                         }
                       }}
-                      className="p-1.5 rounded-xl hover:bg-rose-950/40 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                      title="Excluir"
+                      className="p-1.5 rounded-xl hover:bg-rose-950/40 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Excluir protocolo"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {deletingId === p.id ? (
+                        <div className="w-4 h-4 border-2 border-rose-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>

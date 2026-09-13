@@ -132,19 +132,26 @@ export const supabaseSync = {
     }
   },
 
-  deleteProtocol: async (id: string, userId: string): Promise<boolean> => {
-    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+  deleteProtocol: async (id: string, userId?: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured() || (userId && userId.startsWith('user_demo'))) {
+      return { success: true };
+    }
 
     try {
       const { error } = await supabase
         .from('protocols')
         .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
+        .eq('id', id);
 
-      return !error;
-    } catch {
-      return false;
+      if (error) {
+        console.error('[Supabase] Erro ao excluir protocolo do banco:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('[Supabase] Exceção ao excluir protocolo do banco:', err);
+      return { success: false, error: err?.message || 'Falha de comunicação com o Supabase' };
     }
   },
 
