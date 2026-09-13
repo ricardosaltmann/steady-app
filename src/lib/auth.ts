@@ -1,4 +1,4 @@
-﻿import { UserAccount, CompoundCategory } from '../types';
+import { UserAccount, CompoundCategory } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const AUTH_STORAGE_KEYS = {
@@ -284,12 +284,30 @@ export const auth = {
   updateProfile: (userId: string, updates: Partial<UserAccount>): UserAccount | null => {
     const users = auth.getUsers();
     const index = users.findIndex(u => u.id === userId);
-    if (index === -1) return null;
+    let updated: UserAccount;
 
-    users[index] = { ...users[index], ...updates };
-    localStorage.setItem(AUTH_STORAGE_KEYS.USERS, JSON.stringify(users));
-    localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(users[index]));
-    return users[index];
+    if (index !== -1) {
+      users[index] = { ...users[index], ...updates };
+      localStorage.setItem(AUTH_STORAGE_KEYS.USERS, JSON.stringify(users));
+      updated = users[index];
+    } else {
+      const cached = auth.getCurrentUser() || DEMO_USER;
+      updated = { ...cached, ...updates };
+    }
+
+    localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(updated));
+
+    if (isSupabaseConfigured() && !userId.startsWith('user_demo')) {
+      supabase.from('profiles').update({
+        name: updates.name,
+        phone: updates.phone,
+        age: updates.age,
+        gender: updates.gender,
+        therapeutic_goal: updates.therapeuticGoal,
+      }).eq('id', userId).then();
+    }
+
+    return updated;
   },
 };
 

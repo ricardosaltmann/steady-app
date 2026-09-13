@@ -22,7 +22,7 @@ import { AdminPanel } from './components/Admin/AdminPanel';
 import { WaterCard } from './components/Water/WaterCard';
 import { WaterModal } from './components/Water/WaterModal';
 import { NotificationModal } from './components/Notifications/NotificationModal';
-import { Syringe, Sparkles, ChevronRight, Activity, Calendar, Heart } from 'lucide-react';
+import { Syringe, Sparkles, ChevronRight, Activity, Calendar, Heart, User, LogOut } from 'lucide-react';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => auth.getCurrentUser());
@@ -41,6 +41,7 @@ export function App() {
   const [isInjectionModalOpen, setIsInjectionModalOpen] = useState(false);
   const [quickLogProtocol, setQuickLogProtocol] = useState<Protocol | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'compounds' | 'profile' | 'backup'>('compounds');
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
@@ -322,9 +323,21 @@ export function App() {
   };
 
   // Profile & Compound Handlers
-  const handleSaveProfile = (newProfile: UserProfile) => {
+  const handleSaveProfile = (newProfile: UserProfile, updatedAccount?: Partial<UserAccount>) => {
     storage.saveProfile(newProfile, currentUser?.id);
     setProfile(newProfile);
+    if (currentUser) {
+      const updated = auth.updateProfile(currentUser.id, {
+        name: newProfile.name,
+        phone: newProfile.phone,
+        age: newProfile.age,
+        gender: newProfile.gender,
+        ...updatedAccount,
+      });
+      if (updated) {
+        setCurrentUser(updated);
+      }
+    }
   };
 
   const handleAddCustomCompound = (newCompound: Compound) => {
@@ -365,6 +378,22 @@ export function App() {
   const activeCompound = compounds.find(c => c.id === selectedCompoundId) || enabledCompounds[0] || compounds[0];
   const lastUsedSite = injections[0]?.site;
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const pendingDueProtocols = useMemo(() => {
+    return protocols.filter(p => {
+      if (!p.active || !isProtocolDueToday(p)) return false;
+      const takenToday = injections.some(inj => 
+        (inj.protocolId === p.id || inj.compoundId === p.compoundId) &&
+        inj.date.startsWith(todayStr)
+      );
+      return !takenToday;
+    });
+  }, [protocols, injections, todayStr]);
+
+  const hasDueReminders = Boolean(notificationSettings.medicationReminders && pendingDueProtocols.length > 0);
+  const currentHourMinute = new Date().toTimeString().slice(0, 5);
+  const isAlarmActive = Boolean(hasDueReminders && currentHourMinute >= (notificationSettings.medicationTime || '08:00'));
+
   // If user is not authenticated, present AuthScreen
   if (!currentUser) {
     return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
@@ -379,14 +408,67 @@ export function App() {
         onLogout={handleLogout}
         onOpenAdmin={() => setIsAdminPanelOpen(true)}
         onOpenNewInjection={() => setIsInjectionModalOpen(true)}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => {
+          setSettingsTab('compounds');
+          setIsSettingsModalOpen(true);
+        }}
         onOpenWaterModal={() => setIsWaterModalOpen(true)}
         onOpenNotificationsModal={() => setIsNotificationModalOpen(true)}
-        hasDueReminders={protocols.some(p => isProtocolDueToday(p))}
+        hasDueReminders={hasDueReminders}
+        isAlarmActive={isAlarmActive}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-36 sm:pb-32 space-y-6">
+        {/* User Greeting & Fast Access Card */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-950 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black text-base sm:text-lg shadow-md shadow-cyan-500/20 shrink-0">
+              {(profile?.name || currentUser.name || 'U').charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-base font-bold text-white leading-snug">
+                  Olá, <span className="text-cyan-400">{profile?.name || currentUser.name}</span> 👋
+                </h1>
+                {currentUser.isAdmin && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-400">
+                {profile?.goal || currentUser.email || 'Acompanhamento farmacocinético ativo'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+            <button
+              onClick={() => {
+                setSettingsTab('profile');
+                setIsSettingsModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-xs font-semibold text-slate-200 transition-all cursor-pointer shadow-sm active:scale-95"
+            >
+              <User className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Meu Perfil</span>
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('Deseja realmente sair da sua conta?')) {
+                  handleLogout();
+                }
+              }}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/60 text-xs font-semibold text-rose-300 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Sair da Conta (Logout)"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Sair</span>
+            </button>
+          </div>
+        </div>
+
         {/* TAB 1: DASHBOARD & CURVA */}
         {currentTab === 'chart' && activeCompound && (
           <div className="space-y-6 animate-fadeIn">
@@ -589,12 +671,15 @@ export function App() {
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
         profile={profile}
+        currentUser={currentUser}
         compounds={compounds}
         onSaveProfile={handleSaveProfile}
         onAddCustomCompound={handleAddCustomCompound}
         onToggleCompound={handleToggleCompound}
         onToggleAllInCategory={handleToggleAllInCategory}
         onReloadAllData={loadAllData}
+        onLogout={handleLogout}
+        initialTab={settingsTab}
       />
 
       {/* Admin Management Panel */}
@@ -625,6 +710,7 @@ export function App() {
         <NotificationModal
           protocols={protocols}
           compounds={compounds}
+          injections={injections}
           settings={notificationSettings}
           onSaveSettings={handleUpdateNotificationSettings}
           onQuickLogDose={handleQuickLogFromProtocol}

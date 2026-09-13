@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Protocol, Compound, NotificationSettings } from '../../types';
+import { Protocol, Compound, NotificationSettings, Injection } from '../../types';
 import { Bell, Syringe, Droplets, Volume2, Check, X, Sparkles, Clock, AlertCircle } from 'lucide-react';
 import { notificationsService, isProtocolDueToday } from '../../lib/notifications';
 import { formatCompoundDose } from '../../lib/doseFormatter';
@@ -7,6 +7,7 @@ import { formatCompoundDose } from '../../lib/doseFormatter';
 interface NotificationModalProps {
   protocols: Protocol[];
   compounds: Compound[];
+  injections?: Injection[];
   settings: NotificationSettings;
   onSaveSettings: (settings: NotificationSettings) => void;
   onQuickLogDose: (protocol: Protocol) => void;
@@ -16,6 +17,7 @@ interface NotificationModalProps {
 export const NotificationModal: React.FC<NotificationModalProps> = ({
   protocols,
   compounds,
+  injections = [],
   settings,
   onSaveSettings,
   onQuickLogDose,
@@ -218,27 +220,48 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                     <div className="space-y-1.5">
                       {protocolsDueToday.map(p => {
                         const comp = compounds.find(c => c.id === p.compoundId);
+                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const doseTaken = injections.find(inj => 
+                          (inj.protocolId === p.id || inj.compoundId === p.compoundId) &&
+                          inj.date.startsWith(todayStr)
+                        );
+
                         return (
                           <div
                             key={p.id}
-                            className="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
                           >
                             <div>
-                              <span className="font-bold text-white block">{p.name}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-white block">{p.name}</span>
+                                {doseTaken && (
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
+                                    Concluída
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[11px] text-slate-400">
                                 {formatCompoundDose(p.dose, comp?.unit).fullText} • {comp?.name}
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onQuickLogDose(p);
-                                onClose();
-                              }}
-                              className="px-2.5 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
-                            >
-                              Tomar Dose
-                            </button>
+
+                            {doseTaken ? (
+                              <div className="flex items-center gap-1 px-2 py-1 bg-emerald-950/40 border border-emerald-800/50 rounded-lg text-emerald-400 text-[11px] font-semibold">
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Aplicada {doseTaken.date.includes('T') ? doseTaken.date.slice(11, 16) : ''}</span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onQuickLogDose(p);
+                                  onClose();
+                                }}
+                                className="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 rounded-xl text-xs font-bold transition-colors cursor-pointer active:scale-95"
+                              >
+                                Tomar Dose
+                              </button>
+                            )}
                           </div>
                         );
                       })}

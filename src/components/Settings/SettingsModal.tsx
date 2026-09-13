@@ -1,39 +1,59 @@
-import React, { useState, useRef } from 'react';
-import { UserProfile, Compound, CompoundCategory, PrivacySettings } from '../../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { UserProfile, UserAccount, Compound, CompoundCategory, PrivacySettings } from '../../types';
 import { storage } from '../../lib/storage';
 import { CompoundManager } from './CompoundManager';
-import { Settings, Download, Upload, RotateCcw, Plus, ShieldCheck, User, Sliders, X, Globe, Lock } from 'lucide-react';
+import { Settings, Download, Upload, RotateCcw, Plus, ShieldCheck, User, Sliders, X, Globe, Lock, LogOut, CheckCircle2, Mail, Phone, Calendar } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: UserProfile;
+  currentUser?: UserAccount | null;
   compounds: Compound[];
-  onSaveProfile: (profile: UserProfile) => void;
+  onSaveProfile: (profile: UserProfile, updatedAccount?: Partial<UserAccount>) => void;
   onAddCustomCompound: (compound: Compound) => void;
   onToggleCompound: (id: string, enabled: boolean) => void;
   onToggleAllInCategory: (category: CompoundCategory | 'all', enable: boolean) => void;
   onReloadAllData: () => void;
+  onLogout?: () => void;
+  initialTab?: 'compounds' | 'profile' | 'backup';
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   profile,
+  currentUser,
   compounds,
   onSaveProfile,
   onAddCustomCompound,
   onToggleCompound,
   onToggleAllInCategory,
   onReloadAllData,
+  onLogout,
+  initialTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<'compounds' | 'profile' | 'backup'>('compounds');
+  const [activeTab, setActiveTab] = useState<'compounds' | 'profile' | 'backup'>(initialTab || 'compounds');
   const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(() => storage.getPrivacySettings());
 
   // Profile form state
-  const [name, setName] = useState(profile.name);
-  const [gender, setGender] = useState<'male' | 'female' | 'other'>(profile.gender);
-  const [goal, setGoal] = useState(profile.goal || '');
+  const [name, setName] = useState(profile?.name || currentUser?.name || '');
+  const [gender, setGender] = useState<'male' | 'female' | 'other'>(profile?.gender || (currentUser?.gender as any) || 'male');
+  const [goal, setGoal] = useState(profile?.goal || '');
+  const [phone, setPhone] = useState(currentUser?.phone || profile?.phone || '');
+  const [age, setAge] = useState(currentUser?.age ? String(currentUser.age) : profile?.age ? String(profile.age) : '');
+
+  // Synchronize state when modal opens or profile/currentUser updates
+  useEffect(() => {
+    if (isOpen) {
+      if (initialTab) setActiveTab(initialTab);
+      setName(profile?.name || currentUser?.name || '');
+      setGender(profile?.gender || (currentUser?.gender as any) || 'male');
+      setGoal(profile?.goal || '');
+      setPhone(currentUser?.phone || profile?.phone || '');
+      setAge(currentUser?.age ? String(currentUser.age) : profile?.age ? String(profile.age) : '');
+    }
+  }, [isOpen, profile, currentUser, initialTab]);
 
   // Add custom compound state
   const [showAddCompound, setShowAddCompound] = useState(false);
@@ -52,12 +72,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveProfile({
+    const updatedProfile: UserProfile = {
       ...profile,
-      name,
+      name: name.trim(),
       gender,
-      goal,
-    });
+      goal: goal.trim(),
+      phone: phone.trim() || undefined,
+      age: age ? parseInt(age) : undefined,
+    };
+    const updatedAccount: Partial<UserAccount> = {
+      name: name.trim(),
+      gender,
+      phone: phone.trim() || undefined,
+      age: age ? parseInt(age) : undefined,
+    };
+    onSaveProfile(updatedProfile, updatedAccount);
     alert('Perfil atualizado com sucesso!');
   };
 
@@ -306,57 +335,149 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Tab 2: Profile */}
         {activeTab === 'profile' && (
-          <form onSubmit={handleSaveProfile} className="space-y-4 bg-slate-950/60 p-5 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-              <User className="w-4 h-4 text-blue-400" />
-              Dados do Paciente / Usuário
+          <div className="space-y-4">
+            {/* User Account Card */}
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-cyan-500/20">
+                  {(name || currentUser?.name || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-sm">
+                      {name || currentUser?.name || 'Usuário'}
+                    </span>
+                    {currentUser?.isAdmin && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold">
+                        Admin
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-cyan-400" />
+                    {currentUser?.email || 'Sessão local ativa'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-2.5 py-1 rounded-xl">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Conectado</span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSaveProfile} className="space-y-4 bg-slate-950/60 p-5 rounded-2xl border border-slate-800">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                <User className="w-4 h-4 text-blue-400" />
+                Dados do Paciente / Usuário
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Nome ou Apelido</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">E-mail da Conta</label>
+                  <input
+                    type="email"
+                    value={currentUser?.email || ''}
+                    disabled
+                    placeholder="email@exemplo.com"
+                    className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-400 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Telefone / WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder="(11) 99999-8888"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Idade</label>
+                  <input
+                    type="number"
+                    value={age}
+                    onChange={e => setAge(e.target.value)}
+                    placeholder="ex: 32"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Foco Terapêutico</label>
+                  <select
+                    value={gender}
+                    onChange={e => setGender(e.target.value as any)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                  >
+                    <option value="male">TRT Masculina & Performance</option>
+                    <option value="female">HRT Feminina / Menopausa</option>
+                    <option value="other">Protocolo Misto / Peptídeos</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">Nome ou Apelido</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                <label className="text-xs text-slate-400">Objetivo / Observações Clínicas</label>
+                <textarea
+                  rows={2}
+                  value={goal}
+                  onChange={e => setGoal(e.target.value)}
+                  placeholder="ex: Otimização hormonal, controle glicêmico, manutenção da composição corporal e longevidade"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium resize-none"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-slate-400">Foco Terapêutico</label>
-                <select
-                  value={gender}
-                  onChange={e => setGender(e.target.value as any)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer"
                 >
-                  <option value="male">TRT Masculina & Performance</option>
-                  <option value="female">HRT Feminina</option>
-                  <option value="other">Protocolo Misto / Peptídeos</option>
-                </select>
+                  Salvar Informações
+                </button>
               </div>
-            </div>
+            </form>
 
-            <div className="space-y-1">
-              <label className="text-xs text-slate-400">Objetivo / Observações Clínicas</label>
-              <input
-                type="text"
-                value={goal}
-                onChange={e => setGoal(e.target.value)}
-                placeholder="ex: Otimização hormonal, controle glicêmico e recuperação articular"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-              />
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md transition-all"
-              >
-                Salvar Informações
-              </button>
-            </div>
-          </form>
+            {/* Session / Logout Section */}
+            {onLogout && (
+              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white block">Sessão da Conta</span>
+                  <span className="text-[11px] text-slate-400">Deseja desconectar sua conta deste dispositivo?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Deseja realmente sair da sua conta?')) {
+                      onLogout();
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sair da Conta</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Tab 3: Backup & Privacy */}
