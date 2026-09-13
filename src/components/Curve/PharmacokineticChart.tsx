@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -43,6 +43,13 @@ const PROTOCOL_COLORS = [
   '#f97316', // Orange
   '#8b5cf6', // Indigo
 ];
+
+// Helper to determine if a unit uses a high scale (e.g. ng/dL, pg/mL, IU/UI)
+const isHighScaleUnit = (unit?: string): boolean => {
+  if (!unit) return false;
+  const u = unit.toLowerCase();
+  return u.includes('ng/dl') || u.includes('pg/ml') || u.includes('iu') || u.includes('ui');
+};
 
 export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
   compound,
@@ -155,6 +162,35 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return sorted[0]?.weightKg || null;
   }, [symptoms]);
+
+  // Determine currently selected compound series
+  const selectedCompounds = useMemo(() => {
+    return seriesConfigs.filter(s => selectedSeriesIds.includes(s.id));
+  }, [seriesConfigs, selectedSeriesIds]);
+
+  // Determine if dual Y-axis is needed (e.g. ng/dL on left and mg ativo on right)
+  const hasHighScale = useMemo(() => {
+    return selectedCompounds.some(s => isHighScaleUnit(s.clinicalUnit));
+  }, [selectedCompounds]);
+
+  const hasLowScale = useMemo(() => {
+    return selectedCompounds.some(s => !isHighScaleUnit(s.clinicalUnit));
+  }, [selectedCompounds]);
+
+  const isDualAxis = hasHighScale && hasLowScale;
+
+  const highScaleUnit = useMemo(() => {
+    return selectedCompounds.find(s => isHighScaleUnit(s.clinicalUnit))?.clinicalUnit || '';
+  }, [selectedCompounds]);
+
+  const lowScaleUnit = useMemo(() => {
+    return selectedCompounds.find(s => !isHighScaleUnit(s.clinicalUnit))?.clinicalUnit || '';
+  }, [selectedCompounds]);
+
+  const getSeriesYAxisId = (s: typeof seriesConfigs[0]) => {
+    if (!isDualAxis) return 'leftAxis';
+    return isHighScaleUnit(s.clinicalUnit) ? 'leftAxis' : 'rightAxis';
+  };
 
   // Combine multiple curves and weight into a single unified time series
   const chartData = useMemo(() => {
@@ -392,6 +428,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                     <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                       {seriesConfigs.map(s => {
                         const isSelected = selectedSeriesIds.includes(s.id);
+                        const isHigh = isHighScaleUnit(s.clinicalUnit);
                         return (
                           <button
                             key={s.id}
@@ -409,6 +446,11 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                                 <span className="font-semibold block truncate">{s.name}</span>
                                 <span className="text-[10px] text-slate-400 truncate">
                                   {s.protocol?.dose ? `${formatCompoundDose(s.protocol.dose, s.unit).fullText}` : s.compoundName} • {s.clinicalUnit}
+                                  {isDualAxis && (
+                                    <span className="ml-1 text-[9px] text-slate-500 font-mono">
+                                      ({isHigh ? 'Eixo Esq' : 'Eixo Dir'})
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -476,6 +518,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
           {/* Active Protocols Chips */}
           {seriesConfigs.map(s => {
             const isSelected = selectedSeriesIds.includes(s.id);
+            const isHigh = isHighScaleUnit(s.clinicalUnit);
             return (
               <button
                 key={s.id}
@@ -492,15 +535,30 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                 <span className="text-[10px] text-slate-400 font-normal">
                   ({s.currentLevel} {s.clinicalUnit})
                 </span>
+                {isDualAxis && isSelected && (
+                  <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-medium ${
+                    isHigh ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/50' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/50'
+                  }`}>
+                    {isHigh ? 'Esq' : 'Dir'}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* The Recharts Graphic (Dual Y-Axis: Left for Compounds, Right for Weight) */}
+        {/* The Recharts Graphic (Dual Y-Axis: Left for High Scale, Right for Low Scale / Weight) */}
         <div className="w-full h-64 sm:h-76">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: isWeightSelected && hasWeightData ? 0 : 5, left: -20, bottom: 0 }}>
+            <ComposedChart
+              data={chartData}
+              margin={{
+                top: 10,
+                right: isDualAxis || (isWeightSelected && hasWeightData) ? 10 : 5,
+                left: -15,
+                bottom: 0,
+              }}
+            >
               <defs>
                 {seriesConfigs.map(s => (
                   <linearGradient key={s.id} id={`grad_${s.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -526,15 +584,34 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                 }}
               />
 
-              {/* Left Y-Axis: Compounds Concentration */}
+              {/* Left Y-Axis: High Scale Compounds (e.g. ng/dL) or Default Compounds Axis */}
               <YAxis
-                yAxisId="compoundAxis"
+                yAxisId="leftAxis"
                 orientation="left"
                 stroke="#64748b"
                 tick={{ fontSize: 10, fill: '#64748b' }}
                 tickLine={false}
                 axisLine={false}
+                domain={[0, 'auto']}
+                tickFormatter={(v: number) => {
+                  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
+                  return `${v}`;
+                }}
               />
+
+              {/* Right Y-Axis: Low Scale Compounds (e.g. mg ativo, mcg) when Dual Axis is active */}
+              {isDualAxis && (
+                <YAxis
+                  yAxisId="rightAxis"
+                  orientation="right"
+                  stroke="#34d399"
+                  tick={{ fontSize: 10, fill: '#34d399' }}
+                  tickLine={false}
+                  axisLine={false}
+                  domain={[0, 'auto']}
+                  tickFormatter={(v: number) => `${v}`}
+                />
+              )}
 
               {/* Right Y-Axis: Weight in kg (if selected) */}
               {isWeightSelected && hasWeightData && (
@@ -547,6 +624,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                   tick={{ fontSize: 10, fill: '#10b981' }}
                   tickLine={false}
                   axisLine={false}
+                  hide={isDualAxis}
                 />
               )}
 
@@ -554,7 +632,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
 
               {/* "Hoje" Reference Line */}
               <ReferenceLine
-                yAxisId="compoundAxis"
+                yAxisId="leftAxis"
                 x={nowMs}
                 stroke="#f43f5e"
                 strokeDasharray="3 3"
@@ -569,10 +647,10 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
               />
 
               {/* 1. Solid Curve for Past History (Up to Today) */}
-              {seriesConfigs.filter(s => selectedSeriesIds.includes(s.id)).map(s => (
+              {selectedCompounds.map(s => (
                 <Area
                   key={`act_${s.id}`}
-                  yAxisId="compoundAxis"
+                  yAxisId={getSeriesYAxisId(s)}
                   type="monotone"
                   dataKey={`actual_${s.id}`}
                   stroke={s.color}
@@ -587,10 +665,10 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
               ))}
 
               {/* 2. Dashed / Dotted Curve with reduced opacity for Future Projections (Estimates) */}
-              {seriesConfigs.filter(s => selectedSeriesIds.includes(s.id)).map(s => (
+              {selectedCompounds.map(s => (
                 <Line
                   key={`proj_${s.id}`}
-                  yAxisId="compoundAxis"
+                  yAxisId={getSeriesYAxisId(s)}
                   type="monotone"
                   dataKey={`projected_${s.id}`}
                   stroke={s.color}
@@ -607,7 +685,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
               {/* Weight Trend Line (Emerald Green) */}
               {isWeightSelected && (
                 <Line
-                  yAxisId={hasWeightData ? 'weightAxis' : 'compoundAxis'}
+                  yAxisId={hasWeightData ? 'weightAxis' : 'leftAxis'}
                   type="monotone"
                   dataKey="weightKg"
                   stroke="#10b981"
@@ -631,20 +709,30 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                 Evolução de Peso (kg)
               </span>
             )}
-            {seriesConfigs.filter(s => selectedSeriesIds.includes(s.id)).map(s => (
+            {selectedCompounds.map(s => (
               <span key={s.id} className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
                 <span>{s.name}</span>
+                {isDualAxis && (
+                  <span className="text-[9px] text-slate-500 font-mono">
+                    ({isHighScaleUnit(s.clinicalUnit) ? 'Esq' : 'Dir'})
+                  </span>
+                )}
               </span>
             ))}
           </div>
 
           <div className="flex items-center gap-3 text-[10px] text-slate-400">
+            {isDualAxis && (
+              <span className="text-[10px] text-cyan-300/90 font-medium bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700">
+                Eixo Esq: {highScaleUnit} • Eixo Dir: {lowScaleUnit}
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <span className="w-3 h-0.5 bg-cyan-400 inline-block" /> Linha sólida: Histórico
             </span>
             <span className="flex items-center gap-1 text-purple-300">
-              <span className="w-3 border-b-2 border-dashed border-purple-400 inline-block" /> Tracejada: Projeção futura
+              <span className="w-3 border-b-2 border-dashed border-purple-400 inline-block" /> Tracejada: Projeção
             </span>
           </div>
         </div>

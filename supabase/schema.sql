@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- STEADY PROTOCOL TRACKER - SUPABASE DATABASE SCHEMA & RLS
 -- Cole este script no SQL Editor do seu projeto Supabase (supabase.com)
 -- ==============================================================================
@@ -8,6 +8,10 @@ create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   name text,
   email text,
+  phone text,
+  age numeric,
+  gender text default 'male',
+  selected_categories text[] default array['peptide', 'steroid'],
   therapeutic_goal text default 'male_trt',
   is_admin boolean default false,
   birth_date date,
@@ -15,6 +19,12 @@ create table if not exists public.profiles (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Garantir que colunas existam caso a tabela já tenha sido criada anteriormente
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists age numeric;
+alter table public.profiles add column if not exists gender text default 'male';
+alter table public.profiles add column if not exists selected_categories text[] default array['peptide', 'steroid'];
 
 -- Habilitar RLS em profiles
 alter table public.profiles enable row level security;
@@ -149,18 +159,31 @@ create policy "Apenas administradores podem modificar compostos globais"
   on public.global_compounds for all
   using ( (select is_admin from public.profiles where id = auth.uid()) = true );
 
--- 7. TRIGGER AUTOMÁTICO: Criação de Perfil no Signup
+-- 7. TRIGGER AUTOMÁTICO: Criação e Atualização de Perfil no Signup
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, name, email, therapeutic_goal, is_admin)
+  insert into public.profiles (id, name, email, phone, age, gender, selected_categories, therapeutic_goal, is_admin)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
     new.email,
+    new.raw_user_meta_data->>'phone',
+    case when new.raw_user_meta_data->>'age' is not null and new.raw_user_meta_data->>'age' != '' then (new.raw_user_meta_data->>'age')::numeric else null end,
+    coalesce(new.raw_user_meta_data->>'gender', 'male'),
+    coalesce(
+      array(select jsonb_array_elements_text(coalesce(new.raw_user_meta_data->'selected_categories', '["peptide","steroid"]'::jsonb))),
+      array['peptide', 'steroid']
+    ),
     coalesce(new.raw_user_meta_data->>'therapeutic_goal', 'male_trt'),
-    case when new.email = 'admin@steady.app' then true else false end
-  );
+    case when new.email = 'admin@steady.app' or new.email = 'ricardoaltmann54@gmail.com' then true else false end
+  )
+  on conflict (id) do update set
+    name = coalesce(excluded.name, profiles.name),
+    phone = coalesce(excluded.phone, profiles.phone),
+    age = coalesce(excluded.age, profiles.age),
+    gender = coalesce(excluded.gender, profiles.gender),
+    updated_at = now();
   return new;
 end;
 $$ language plpgsql security definer;
@@ -170,3 +193,26 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Sincronizar usuários já existentes em auth.users para public.profiles
+insert into public.profiles (id, name, email, phone, age, gender, selected_categories, therapeutic_goal, is_admin)
+select
+  u.id,
+  coalesce(u.raw_user_meta_data->>'name', split_part(u.email, '@', 1)),
+  u.email,
+  u.raw_user_meta_data->>'phone',
+  case when u.raw_user_meta_data->>'age' is not null and u.raw_user_meta_data->>'age' != '' then (u.raw_user_meta_data->>'age')::numeric else null end,
+  coalesce(u.raw_user_meta_data->>'gender', 'male'),
+  coalesce(
+    array(select jsonb_array_elements_text(coalesce(u.raw_user_meta_data->'selected_categories', '["peptide","steroid"]'::jsonb))),
+    array['peptide', 'steroid']
+  ),
+  coalesce(u.raw_user_meta_data->>'therapeutic_goal', 'male_trt'),
+  case when u.email = 'admin@steady.app' or u.email = 'ricardoaltmann54@gmail.com' then true else false end
+from auth.users u
+on conflict (id) do update set
+  name = coalesce(excluded.name, profiles.name),
+  phone = coalesce(excluded.phone, profiles.phone),
+  age = coalesce(excluded.age, profiles.age),
+  gender = coalesce(excluded.gender, profiles.gender),
+  updated_at = now();
