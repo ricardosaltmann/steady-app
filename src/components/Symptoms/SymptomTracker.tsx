@@ -284,38 +284,6 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   };
 
-  // 1-Click Import of Fitbit Records (From user's Fitbit app)
-  const handleImportFitbitPresets = () => {
-    const presetEntries: HealthImportEntry[] = [
-      {
-        date: '2026-09-11',
-        weightKg: 83.5,
-        bodyFatPercent: 24.0,
-        notes: 'Fitbit / Balança Mi Body (Massa Magra: 63.1 kg, FC repouso: 52-119 bpm)'
-      },
-      {
-        date: '2026-08-28',
-        weightKg: 84.7,
-        notes: 'Fitbit / Balança Mi Body'
-      }
-    ];
-
-    const logs = googleFitSync.createLogsFromEntries(presetEntries, symptoms, currentHeight);
-    logs.forEach(log => onSaveSymptom(log));
-
-    if (onSaveProfile && profile) {
-      onSaveProfile({
-        ...profile,
-        weightKg: 83.5,
-        bodyFatPercent: 24.0,
-      });
-    }
-
-    setSyncFeedback({
-      type: 'success',
-      message: `Sucesso! 2 pesagens do seu Fitbit (83.5 kg de 11/09 e 84.7 kg de 28/08) importadas com sucesso para o seu gráfico e sincronizadas na nuvem!`
-    });
-  };
 
   // Import CSV from Fitbit / Takeout / Balança
   const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1063,41 +1031,42 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* CARD 1: 1-CLIQUE IMPORTAR MEDIÇÕES DO FITBIT */}
+                {/* CARD 1: SINCRONIZAÇÃO NATIVA HEALTH CONNECT */}
                 <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-emerald-500/10 transition-all" />
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Scale className="w-4 h-4 text-emerald-400" />
-                        Pesagens do seu Fitbit
+                        <Activity className="w-4 h-4 text-emerald-400" />
+                        Google Health Connect
                       </span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-                        1 Clique
+                        Nativo Android
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                      Medições reais identificadas no seu aplicativo Fitbit / Balança Digital:
+                      Lê diretamente o banco de dados de saúde do Android alimentado pelo seu app Fitbit e balanças digitais.
                     </p>
-                    <div className="mt-2.5 space-y-1.5">
-                      <div className="p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] flex items-center justify-between">
-                        <span className="text-slate-300 font-medium">11/09/2026</span>
-                        <span className="text-emerald-400 font-bold font-mono">83.5 kg <span className="text-[10px] text-slate-400 font-normal">(24% BF)</span></span>
+                    <div className="mt-2.5 p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] space-y-1">
+                      <div className="text-slate-300 font-medium flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span>Pesagens e Composição Corporal</span>
                       </div>
-                      <div className="p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] flex items-center justify-between">
-                        <span className="text-slate-300 font-medium">28/08/2026</span>
-                        <span className="text-teal-400 font-bold font-mono">84.7 kg</span>
+                      <div className="text-slate-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-teal-400" />
+                        <span>Frequência Cardíaca e Hidratação</span>
                       </div>
                     </div>
                   </div>
 
                   <button
                     type="button"
-                    onClick={handleImportFitbitPresets}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                    onClick={handleSyncNow}
+                    disabled={isSyncing}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Importar Estas Pesagens</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Buscando Dados no Health...' : 'Buscar no Health Connect'}</span>
                   </button>
                 </div>
 
