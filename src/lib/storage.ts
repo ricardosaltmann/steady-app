@@ -1,4 +1,4 @@
-import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings } from '../types';
+import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, DailyActivitySummary, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { auth } from './auth';
 
@@ -464,6 +464,28 @@ export const storage = {
     const withTs = (symptoms || []).map(s => ({
       ...s,
       updatedAt: s.updatedAt || new Date().toISOString(),
+    }));
+    localStorage.setItem(key, JSON.stringify(withTs));
+  },
+
+  // Loja Secundária: Séries Temporais / Alta Frequência (Passos, Sono, Frequência Cardíaca, Hidratação)
+  getDailyActivities: (userId?: string): DailyActivitySummary[] => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = getScopedKey('daily_activities', uid);
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  },
+
+  saveDailyActivities: (activities: DailyActivitySummary[], userId?: string) => {
+    const key = getScopedKey('daily_activities', userId);
+    const withTs = (activities || []).map(a => ({
+      ...a,
+      updatedAt: a.updatedAt || new Date().toISOString(),
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },

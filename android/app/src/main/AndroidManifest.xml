@@ -65,11 +65,12 @@
         <package android:name="com.google.android.apps.healthdata" />
     </queries>
 
-    <!-- Permissions gerais e Health Connect (Leitura de Peso, Altura, Gordura Corporal, Passos, Sono, Frequência Cardíaca, Hidratação) -->
+    <!-- Permissions gerais e Health Connect (Leitura de Peso, Altura, Gordura Corporal, Glicose, Passos, Sono, Frequência Cardíaca, Hidratação) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_HEIGHT" />
     <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />

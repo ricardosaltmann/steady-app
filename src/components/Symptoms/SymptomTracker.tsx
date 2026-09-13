@@ -191,10 +191,10 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   }, []);
 
-  // Filter and sort weight entries - Exclui estritamente dias sem pesagem real para evitar linhas em branco
+  // Filter and sort weight entries - Exclui estritamente dias sem pesagem ou biometria real para evitar linhas em branco
   const weightEntries = useMemo(() => {
     return symptoms
-      .filter(s => typeof s.weightKg === 'number' && s.weightKg > 0)
+      .filter(s => (typeof s.weightKg === 'number' && s.weightKg > 0) || (typeof s.glucoseMgDl === 'number' && s.glucoseMgDl > 0))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [symptoms]);
 
@@ -310,9 +310,6 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   };
 
-  // Ref para garantir execução única do auto-sync por ciclo de montagem
-  const autoSyncRanRef = useRef<boolean>(false);
-
   // Sync Now with connected Google Account / Health Connect
   const handleSyncNow = async (isManualClick: boolean = true) => {
     setIsSyncing(true);
@@ -404,17 +401,20 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   };
 
-  // 4. Auto-sincronização silenciosa na inicialização / montagem da tela
+  // Ref para controle e debounce do auto-sync silencioso em background
+  const lastAutoSyncTimeRef = useRef<number>(0);
+
+  // 4. Auto-sincronização silenciosa na inicialização / montagem da tela e ao alternar abas de saúde
   useEffect(() => {
-    if (!autoSyncRanRef.current) {
-      const cfg = storage.getGoogleHealthConfig();
-      if (cfg.autoSync) {
-        autoSyncRanRef.current = true;
-        console.log('[Health Connect Auto-Sync] Executando sincronização silenciosa em segundo plano...');
-        handleSyncNow(false);
-      }
+    const cfg = storage.getGoogleHealthConfig();
+    const now = Date.now();
+    // Executa silenciosamente se autoSync estiver ativo e não tiver executado nos últimos 30 segundos
+    if (cfg.autoSync && (now - lastAutoSyncTimeRef.current > 30000)) {
+      lastAutoSyncTimeRef.current = now;
+      console.log('[Health Connect Auto-Sync] Executando sincronização silenciosa em segundo plano...');
+      handleSyncNow(false);
     }
-  }, []);
+  }, [activeTab]);
 
   // Connect via Google OAuth Button
   const handleOAuthLogin = async () => {
@@ -850,12 +850,13 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
               </div>
             ) : (
               <div className="overflow-x-auto w-full -mx-2 px-2 sm:mx-0 sm:px-0">
-                <table className="min-w-[820px] w-full text-left text-xs text-slate-300">
+                <table className="min-w-[880px] w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
                     <tr>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Data</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Peso</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap text-amber-400">Gordura (BF)</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap text-emerald-400">Glicose</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">IMC</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Classificação</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Passos</th>
@@ -888,6 +889,15 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                             {entry.bodyFatPercent ? (
                               <span className="font-bold text-amber-300 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md text-xs inline-flex items-center gap-1">
                                 {entry.bodyFatPercent}%
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entry.glucoseMgDl ? (
+                              <span className="font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-md text-xs inline-flex items-center gap-1">
+                                {entry.glucoseMgDl} mg/dL
                               </span>
                             ) : (
                               <span className="text-slate-600 font-mono">-</span>

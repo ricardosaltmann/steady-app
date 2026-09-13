@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HydrationRecord
@@ -29,6 +30,7 @@ import java.time.Instant
         Permission(alias = "weight", strings = ["android.permission.health.READ_WEIGHT"]),
         Permission(alias = "bodyFat", strings = ["android.permission.health.READ_BODY_FAT"]),
         Permission(alias = "height", strings = ["android.permission.health.READ_HEIGHT"]),
+        Permission(alias = "glucose", strings = ["android.permission.health.READ_BLOOD_GLUCOSE"]),
         Permission(alias = "steps", strings = ["android.permission.health.READ_STEPS"]),
         Permission(alias = "sleep", strings = ["android.permission.health.READ_SLEEP"]),
         Permission(alias = "heartRate", strings = ["android.permission.health.READ_HEART_RATE"]),
@@ -390,9 +392,29 @@ class HealthConnectPlugin : Plugin() {
             Log.w(TAG, "Não foi possível ler HydrationRecord: ${e.message}")
         }
 
+        // 7. BloodGlucoseRecord
+        val glucoseArray = JSArray()
+        try {
+            val bgReq = ReadRecordsRequest(
+                recordType = BloodGlucoseRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            val bgRes = client.readRecords(bgReq)
+            for (rec in bgRes.records) {
+                val item = JSObject()
+                item.put("time", rec.time.toString())
+                item.put("glucoseMgDl", rec.level.inMilligramsPerDeciliter)
+                item.put("value", rec.level.inMilligramsPerDeciliter)
+                glucoseArray.put(item)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Não foi possível ler BloodGlucoseRecord: ${e.message}")
+        }
+
         ret.put("weights", weightsArray)
         ret.put("records", weightsArray) // Retrocompatibilidade direta
         ret.put("bodyFat", bodyFatArray)
+        ret.put("glucose", glucoseArray)
         ret.put("steps", stepsArray)
         ret.put("sleep", sleepArray)
         ret.put("heartRates", heartRateArray)

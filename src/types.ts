@@ -132,9 +132,10 @@ export interface SymptomLog {
   weightKg?: number;
   heightCm?: number;
   bodyFatPercent?: number; // % de gordura corporal
+  glucoseMgDl?: number;    // Glicose sanguínea pontual em mg/dL
   waterMl?: number;        // Ingestão de água acumulada no dia em mL
-  steps?: number;          // Passos acumulados no dia
-  sleepHours?: number;     // Horas de sono registradas (ex: 7.5)
+  steps?: number;          // Passos acumulados no dia (resumo consolidado)
+  sleepHours?: number;     // Horas de sono registradas (resumo consolidado)
   heartRateBpm?: number;   // Frequência cardíaca média/repouso (bpm)
   waistCm?: number;        // Cintura (cm)
   hipCm?: number;          // Quadril (cm)
@@ -143,6 +144,16 @@ export interface SymptomLog {
   chestCm?: number;        // Peitoral / Tórax (cm)
   notes?: string;
   updatedAt?: string;      // ISO timestamp para merge seguro de dados
+}
+
+// Loja Secundária: Séries Temporais / Alta Frequência (Armazenamento em segundo plano)
+export interface DailyActivitySummary {
+  date: string;            // YYYY-MM-DD
+  steps?: number;          // Total de passos do dia
+  sleepHours?: number;     // Duração total do sono em horas
+  heartRateBpm?: number;   // Média diária de batimentos cardíacos
+  hydrationMl?: number;    // Hidratação acumulada em mL
+  updatedAt?: string;
 }
 
 export interface UserProfile {
