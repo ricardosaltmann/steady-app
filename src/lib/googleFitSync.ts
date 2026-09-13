@@ -1,12 +1,34 @@
-﻿import { SymptomLog, GoogleHealthSyncConfig } from '../types';
+import { SymptomLog, GoogleHealthSyncConfig } from '../types';
 import { storage } from './storage';
 import { supabase, isSupabaseConfigured } from './supabase';
 
+export interface HealthImportEntry {
+  date: string; // YYYY-MM-DD
+  weightKg: number;
+  bodyFatPercent?: number;
+  energy?: number;
+  libido?: number;
+  mood?: number;
+  sleep?: number;
+  notes?: string;
+}
+
 export const googleFitSync = {
+  // Check if current user session has an active Google OAuth provider token
+  hasProviderToken: async (): Promise<boolean> => {
+    if (!isSupabaseConfigured()) return false;
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      return !!session?.provider_token;
+    } catch {
+      return false;
+    }
+  },
+
   // Connect via Google OAuth
   connectOAuth: async (): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
-      return { success: false, error: 'Serviço de nuvem não configurado.' };
+      return { success: false, error: 'Serviço de nuvem Supabase não configurado.' };
     }
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -19,7 +41,7 @@ export const googleFitSync = {
       if (error) throw error;
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Erro ao abrir login Google' };
+      return { success: false, error: err.message || 'Erro ao abrir autorização do Google.' };
     }
   },
 
@@ -59,8 +81,7 @@ export const googleFitSync = {
     return updated;
   },
 
-  // Perform Real Cloud Sync with Google Fit API
-  // No fake or mock data is ever generated when no records exist
+  // Perform Cloud Sync with Google Fit REST API
   syncData: async (
     existingSymptoms: SymptomLog[],
     _currentWeightKg: number = 82.0,
@@ -72,6 +93,7 @@ export const googleFitSync = {
     count: number;
     message: string;
     lastSyncAt: string;
+    hasOAuthToken: boolean;
   }> => {
     const config = storage.getGoogleHealthConfig(userId);
     if (!config.connected || !config.email) {
@@ -79,25 +101,29 @@ export const googleFitSync = {
         success: false,
         newLogs: [],
         count: 0,
-        message: 'Nenhuma conta Google conectada. Informe seu email do Google abaixo.',
+        message: 'Nenhuma conta Google conectada. Informe seu email do Google ou conecte via OAuth.',
         lastSyncAt: config.lastSyncAt || '',
+        hasOAuthToken: false,
       };
     }
 
-    // Existing dates to prevent duplicate entries
+    // Existing dates to avoid duplication
     const existingDates = new Set(existingSymptoms.map(s => s.date));
     const newLogs: SymptomLog[] = [];
+    let hasToken = false;
 
-    // Query live Google Fit API if provider_token is available in Supabase session
+    // Check Google OAuth token in Supabase session
     if (isSupabaseConfigured()) {
       try {
         const session = (await supabase.auth.getSession()).data.session;
         const providerToken = session?.provider_token;
 
         if (providerToken) {
-          const startTimeMillis = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          hasToken = true;
+          const startTimeMillis = Date.now() - 60 * 24 * 60 * 60 * 1000; // 60 dias
           const endTimeMillis = Date.now();
 
+          // Fetch Weight and Body Fat
           const response = await fetch('https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
             method: 'POST',
             headers: {
@@ -105,7 +131,10 @@ export const googleFitSync = {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              aggregateBy: [{ dataTypeName: 'com.google.weight' }],
+              aggregateBy: [
+                { dataTypeName: 'com.google.weight' },
+                { dataTypeName: 'com.google.body.fat.percentage' },
+              ],
               bucketByTime: { durationMillis: 86400000 },
               startTimeMillis,
               endTimeMillis,
@@ -116,17 +145,27 @@ export const googleFitSync = {
             const data = await response.json();
             if (data.bucket) {
               data.bucket.forEach((b: any) => {
-                const point = b.dataset?.[0]?.point?.[0];
-                if (point?.value?.[0]?.fpVal) {
-                  const w = parseFloat(point.value[0].fpVal.toFixed(1));
+                const weightPoint = b.dataset?.[0]?.point?.[0];
+                const fatPoint = b.dataset?.[1]?.point?.[0];
+
+                if (weightPoint?.value?.[0]?.fpVal) {
+                  const w = parseFloat(weightPoint.value[0].fpVal.toFixed(1));
+                  const fat = fatPoint?.value?.[0]?.fpVal ? parseFloat(fatPoint.value[0].fpVal.toFixed(1)) : undefined;
                   const dateStr = new Date(parseInt(b.startTimeMillis)).toISOString().slice(0, 10);
+
                   if (!existingDates.has(dateStr)) {
                     newLogs.push({
                       id: 'symp_gfit_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
                       date: dateStr,
                       weightKg: w,
+                      bodyFatPercent: fat,
                       heightCm,
-                      energy: 4, libido: 4, mood: 4, sleep: 4, acne: 1, waterRetention: 1,
+                      energy: 4,
+                      libido: 4,
+                      mood: 4,
+                      sleep: 4,
+                      acne: 1,
+                      waterRetention: 1,
                       notes: 'Sincronizado via Google Fit API',
                       updatedAt: new Date().toISOString(),
                     });
@@ -138,23 +177,160 @@ export const googleFitSync = {
           }
         }
       } catch (err) {
-        console.warn('Google Fit API query warning:', err);
+        console.warn('Google Fit API query error:', err);
       }
     }
 
-    // Update last sync time
     const updatedSyncTime = new Date().toISOString();
     config.lastSyncAt = updatedSyncTime;
     storage.saveGoogleHealthConfig(config, userId);
+
+    if (!hasToken) {
+      return {
+        success: false,
+        newLogs: [],
+        count: 0,
+        message: 'Aviso: Token OAuth do Google não encontrado na sessão atual. Como você entrou com e-mail/senha, o Google não libera o acesso à API sem autorização OAuth. Conecte pelo botão Google OAuth ou utilize a Importação do Fitbit abaixo.',
+        lastSyncAt: updatedSyncTime,
+        hasOAuthToken: false,
+      };
+    }
 
     return {
       success: true,
       newLogs,
       count: newLogs.length,
       message: newLogs.length > 0
-        ? `Sincronização concluída! ${newLogs.length} medições reais importadas do Google Fit.`
-        : 'Nenhuma nova medição encontrada na sua conta Google Fit para os últimos 30 dias.',
+        ? `Sincronização concluída! ${newLogs.length} medições importadas do Google Fit.`
+        : 'Nenhuma nova pesagem encontrada na API Google Fit para os últimos 60 dias.',
       lastSyncAt: updatedSyncTime,
+      hasOAuthToken: true,
     };
+  },
+
+  // Parse CSV exported from Fitbit or Google Fit / Takeout
+  parseFitbitCsv: (csvText: string, heightCm: number = 175): SymptomLog[] => {
+    const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].toLowerCase().split(/[,;\t]/).map(h => h.trim().replace(/['"]/g, ''));
+    
+    // Detect column indexes
+    let dateIdx = headers.findIndex(h => h.includes('date') || h.includes('data'));
+    let weightIdx = headers.findIndex(h => h.includes('weight') || h.includes('peso') || h.includes('massa'));
+    let fatIdx = headers.findIndex(h => h.includes('fat') || h.includes('gordura') || h.includes('bf'));
+
+    if (dateIdx === -1) dateIdx = 0;
+    if (weightIdx === -1) weightIdx = 1;
+
+    const parsedLogs: SymptomLog[] = [];
+    const seenDates = new Set<string>();
+
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(/[,;\t]/).map(p => p.trim().replace(/['"]/g, ''));
+      if (parts.length <= Math.max(dateIdx, weightIdx)) continue;
+
+      const rawDate = parts[dateIdx];
+      const rawWeight = parts[weightIdx];
+      const rawFat = fatIdx !== -1 && parts[fatIdx] ? parts[fatIdx] : undefined;
+
+      // Parse date (supports YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY)
+      let formattedDate = '';
+      if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+        formattedDate = rawDate.slice(0, 10);
+      } else if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}/.test(rawDate)) {
+        const dparts = rawDate.split(/[\/-]/);
+        const day = dparts[0].padStart(2, '0');
+        const month = dparts[1].padStart(2, '0');
+        const year = dparts[2].slice(0, 4);
+        formattedDate = `${year}-${month}-${day}`;
+      } else {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          formattedDate = d.toISOString().slice(0, 10);
+        }
+      }
+
+      if (!formattedDate || seenDates.has(formattedDate)) continue;
+
+      // Parse weight (handles "83.5", "83,5", "83.5 kg")
+      const cleanWeight = rawWeight.replace(/[^\d.,]/g, '').replace(',', '.');
+      const weightVal = parseFloat(cleanWeight);
+
+      if (isNaN(weightVal) || weightVal < 30 || weightVal > 300) continue;
+
+      let fatVal: number | undefined;
+      if (rawFat) {
+        const cleanFat = rawFat.replace(/[^\d.,]/g, '').replace(',', '.');
+        const parsedFat = parseFloat(cleanFat);
+        if (!isNaN(parsedFat) && parsedFat > 3 && parsedFat < 60) {
+          fatVal = parsedFat;
+        }
+      }
+
+      seenDates.add(formattedDate);
+      parsedLogs.push({
+        id: 'symp_fitbit_csv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        date: formattedDate,
+        weightKg: weightVal,
+        bodyFatPercent: fatVal,
+        heightCm,
+        energy: 4,
+        libido: 4,
+        mood: 4,
+        sleep: 4,
+        acne: 1,
+        waterRetention: 1,
+        notes: 'Importado de arquivo Fitbit/Google Health',
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return parsedLogs;
+  },
+
+  // Helper to convert an array of manual or preset health entries into SymptomLogs
+  createLogsFromEntries: (
+    entries: HealthImportEntry[],
+    existingSymptoms: SymptomLog[],
+    heightCm: number = 175
+  ): SymptomLog[] => {
+    const existingDates = new Set(existingSymptoms.map(s => s.date));
+    const created: SymptomLog[] = [];
+
+    for (const entry of entries) {
+      if (existingDates.has(entry.date)) {
+        // Find and update existing record with weight and body fat
+        const existing = existingSymptoms.find(s => s.date === entry.date);
+        if (existing) {
+          created.push({
+            ...existing,
+            weightKg: entry.weightKg,
+            bodyFatPercent: entry.bodyFatPercent !== undefined ? entry.bodyFatPercent : existing.bodyFatPercent,
+            notes: entry.notes || existing.notes,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      } else {
+        created.push({
+          id: 'symp_fitbit_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+          date: entry.date,
+          weightKg: entry.weightKg,
+          bodyFatPercent: entry.bodyFatPercent,
+          heightCm,
+          energy: entry.energy || 4,
+          libido: entry.libido || 4,
+          mood: entry.mood || 4,
+          sleep: entry.sleep || 4,
+          acne: 1,
+          waterRetention: 1,
+          notes: entry.notes || 'Importado do Fitbit / Google Health',
+          updatedAt: new Date().toISOString(),
+        });
+        existingDates.add(entry.date);
+      }
+    }
+
+    return created;
   },
 };

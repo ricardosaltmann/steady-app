@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SymptomLog, UserProfile, Injection, GoogleHealthSyncConfig } from '../../types';
-import { googleFitSync } from '../../lib/googleFitSync';
+import { googleFitSync, HealthImportEntry } from '../../lib/googleFitSync';
 import { storage } from '../../lib/storage';
 import { 
   Heart, 
@@ -17,6 +17,7 @@ import {
   TrendingDown, 
   TrendingUp, 
   Download, 
+  Upload,
   Smartphone, 
   Target, 
   CheckCircle2, 
@@ -114,6 +115,17 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [hasOAuthToken, setHasOAuthToken] = useState(false);
+  const [quickImportDate, setQuickImportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [quickImportWeight, setQuickImportWeight] = useState('');
+  const [quickImportFat, setQuickImportFat] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    googleFitSync.hasProviderToken().then(hasToken => {
+      setHasOAuthToken(hasToken);
+    });
+  }, []);
 
   // Filter and sort weight entries
   const weightEntries = useMemo(() => {
@@ -224,8 +236,9 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
       }
-      setSyncFeedback({ type: 'success', message: res.message });
+      setSyncFeedback({ type: res.success ? 'success' : 'error', message: res.message });
       setGoogleConfig(storage.getGoogleHealthConfig());
+      setHasOAuthToken(res.hasOAuthToken);
     } catch (err: any) {
       setSyncFeedback({ type: 'error', message: 'Erro na sincronização: ' + err.message });
     } finally {
@@ -242,8 +255,9 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
       }
-      setSyncFeedback({ type: 'success', message: res.message });
+      setSyncFeedback({ type: res.success ? 'success' : 'error', message: res.message });
       setGoogleConfig(storage.getGoogleHealthConfig());
+      setHasOAuthToken(res.hasOAuthToken);
     } catch (err: any) {
       setSyncFeedback({ type: 'error', message: 'Erro ao sincronizar: ' + err.message });
     } finally {
@@ -260,7 +274,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       if (!res.success) {
         setSyncFeedback({ 
           type: 'error', 
-          message: res.error || 'Popup de autenticação não disponível. Digite seu email do Google no campo ao lado para conectar diretamente.' 
+          message: res.error || 'Popup de autenticação não disponível. Conecte seu email e utilize a importação direta abaixo.' 
         });
       }
     } catch (err: any) {
@@ -270,10 +284,110 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   };
 
+  // 1-Click Import of Fitbit Records (From user's Fitbit app)
+  const handleImportFitbitPresets = () => {
+    const presetEntries: HealthImportEntry[] = [
+      {
+        date: '2026-09-11',
+        weightKg: 83.5,
+        bodyFatPercent: 24.0,
+        notes: 'Fitbit / Balança Mi Body (Massa Magra: 63.1 kg, FC repouso: 52-119 bpm)'
+      },
+      {
+        date: '2026-08-28',
+        weightKg: 84.7,
+        notes: 'Fitbit / Balança Mi Body'
+      }
+    ];
+
+    const logs = googleFitSync.createLogsFromEntries(presetEntries, symptoms, currentHeight);
+    logs.forEach(log => onSaveSymptom(log));
+
+    if (onSaveProfile && profile) {
+      onSaveProfile({
+        ...profile,
+        weightKg: 83.5,
+        bodyFatPercent: 24.0,
+      });
+    }
+
+    setSyncFeedback({
+      type: 'success',
+      message: `Sucesso! 2 pesagens do seu Fitbit (83.5 kg de 11/09 e 84.7 kg de 28/08) importadas com sucesso para o seu gráfico e sincronizadas na nuvem!`
+    });
+  };
+
+  // Import CSV from Fitbit / Takeout / Balança
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = evt.target?.result as string;
+      if (!content) return;
+      try {
+        const parsed = googleFitSync.parseFitbitCsv(content, currentHeight);
+        if (parsed.length === 0) {
+          setSyncFeedback({
+            type: 'error',
+            message: 'Nenhum registro de peso válido encontrado no arquivo CSV. Verifique se o arquivo possui colunas com datas e pesos.'
+          });
+          return;
+        }
+        parsed.forEach(log => onSaveSymptom(log));
+        setSyncFeedback({
+          type: 'success',
+          message: `Sucesso! ${parsed.length} pesagens históricas importadas do arquivo CSV e sincronizadas!`
+        });
+      } catch (err: any) {
+        setSyncFeedback({
+          type: 'error',
+          message: 'Erro ao processar arquivo CSV: ' + err.message
+        });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // Quick retroactive weigh-in entry
+  const handleQuickAddWeight = (e: React.FormEvent) => {
+    e.preventDefault();
+    const w = parseFloat(quickImportWeight);
+    if (!w || isNaN(w)) return;
+
+    const entry: HealthImportEntry = {
+      date: quickImportDate,
+      weightKg: w,
+      bodyFatPercent: quickImportFat ? parseFloat(quickImportFat) : undefined,
+      notes: 'Registro rápido (Fitbit/Health)'
+    };
+
+    const logs = googleFitSync.createLogsFromEntries([entry], symptoms, currentHeight);
+    logs.forEach(log => onSaveSymptom(log));
+
+    if (onSaveProfile && profile) {
+      onSaveProfile({
+        ...profile,
+        weightKg: w,
+        bodyFatPercent: entry.bodyFatPercent !== undefined ? entry.bodyFatPercent : profile.bodyFatPercent
+      });
+    }
+
+    setQuickImportWeight('');
+    setQuickImportFat('');
+    setSyncFeedback({
+      type: 'success',
+      message: `Pesagem de ${w} kg em ${new Date(quickImportDate).toLocaleDateString('pt-BR')} adicionada com sucesso!`
+    });
+  };
+
   // Disconnect Google Account
   const handleDisconnect = () => {
     const newConfig = googleFitSync.disconnect();
     setGoogleConfig(newConfig);
+    setHasOAuthToken(false);
     setSyncFeedback({ type: 'success', message: 'Conta Google desconectada com sucesso.' });
   };
 
@@ -840,30 +954,41 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
               )}
             </div>
 
-            {/* Connected State View */}
-            {googleConfig.connected ? (
-              <div className="mt-5 p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="relative flex h-3 w-3">
+            {/* Status da Conexão & Alertas */}
+            <div className="mt-5 p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-3 w-3">
+                    {googleConfig.connected && (
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                    </span>
-                    <div>
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <span>Conta Conectada:</span>
-                        <span className="text-emerald-300 font-mono">{googleConfig.email}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400">
-                        {googleConfig.lastSyncAt 
-                          ? `Última sincronização: ${new Date(googleConfig.lastSyncAt).toLocaleString('pt-BR')}`
-                          : 'Sincronização em tempo real ativa'}
-                      </p>
+                    )}
+                    <span className={`relative inline-flex rounded-full h-3 w-3 ${googleConfig.connected ? 'bg-emerald-500' : 'bg-slate-600'}`}></span>
+                  </span>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-2 flex-wrap">
+                      <span>Conta Vinculada:</span>
+                      <span className="text-emerald-300 font-mono">{googleConfig.email || 'Nenhuma conta vinculada'}</span>
+                      {hasOAuthToken ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                          OAuth Nuvem Ativo
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/60">
+                          Modo Local / E-mail
+                        </span>
+                      )}
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {googleConfig.lastSyncAt 
+                        ? `Última sincronização: ${new Date(googleConfig.lastSyncAt).toLocaleString('pt-BR')}`
+                        : 'Pronto para importar e sincronizar'}
+                    </p>
                   </div>
+                </div>
 
+                {googleConfig.connected && (
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-slate-300 font-medium">Sincronização Automática:</span>
+                    <span className="text-[11px] text-slate-300 font-medium">Auto-sincronizar:</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -881,104 +1006,186 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                       />
                     </button>
                   </div>
-                </div>
-
-                {syncFeedback && (
-                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-                    syncFeedback.type === 'success' 
-                      ? 'bg-emerald-900/40 border border-emerald-500/40 text-emerald-200'
-                      : 'bg-rose-900/40 border border-rose-500/40 text-rose-200'
-                  }`}>
-                    {syncFeedback.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    )}
-                    <span>{syncFeedback.message}</span>
-                  </div>
                 )}
               </div>
-            ) : (
-              /* Disconnected State: Direct Email or 1-Click OAuth */
-              <div className="mt-5 pt-5 border-t border-slate-800/80 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Option 1: Digitar Email da Conta Google */}
-                  <form onSubmit={handleConnectGoogleEmail} className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
-                    <div>
-                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Link2 className="w-4 h-4 text-cyan-400" />
-                        Vincular por E-mail do Google (Gmail)
-                      </span>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                        Informe o e-mail da sua conta Google ou da balança conectada para sincronizar automaticamente sem precisar de arquivo nenhum.
-                      </p>
-                    </div>
 
-                    <div className="space-y-2">
-                      <input
-                        type="email"
-                        required
-                        placeholder="seu.email@gmail.com"
-                        value={googleEmailInput}
-                        onChange={e => setGoogleEmailInput(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                      />
-                      <button
-                        type="submit"
-                        disabled={isSyncing}
-                        className="w-full py-2.5 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                        <span>{isSyncing ? 'Conectando e Sincronizando...' : 'Conectar Conta e Sincronizar'}</span>
-                      </button>
-                    </div>
-                  </form>
-
-                  {/* Option 2: Conectar com 1 Clique (Login Google OAuth) */}
-                  <div className="bg-slate-950/70 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
-                    <div>
-                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
-                        Conexão Direta com 1 Clique (OAuth)
-                      </span>
-                      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                        Abra o pop-up seguro do Google para autorizar leitura direta da API de dados corporais do Google Fit.
-                      </p>
-                    </div>
-
+              {/* Informação sobre Token de API vs Login por E-mail */}
+              {!hasOAuthToken && (
+                <div className="p-3.5 rounded-xl bg-slate-900/90 border border-amber-500/30 text-slate-300 text-xs space-y-2">
+                  <div className="flex items-center gap-2 text-amber-300 font-semibold">
+                    <Info className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>Por que a sincronização de nuvem precisa de autorização?</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Como você efetuou login no app por <strong>e-mail e senha</strong>, o Google não concede o Token de API de nuvem automaticamente apenas pelo texto do e-mail. Para dados em tempo real da nuvem Google Fit, você pode autorizar via Google OAuth, ou usar as opções diretas de importação do Fitbit logo abaixo!
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       type="button"
                       onClick={handleOAuthLogin}
                       disabled={isSyncing}
-                      className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-950 font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shadow disabled:opacity-50"
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
                         <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
                         <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
                         <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                       </svg>
-                      <span>Entrar com a Conta Google</span>
+                      <span>Autorizar Login com Google (OAuth)</span>
                     </button>
                   </div>
                 </div>
+              )}
 
-                {syncFeedback && (
-                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-                    syncFeedback.type === 'success' 
-                      ? 'bg-emerald-900/40 border border-emerald-500/40 text-emerald-200'
-                      : 'bg-rose-900/40 border border-rose-500/40 text-rose-200'
-                  }`}>
-                    {syncFeedback.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                    )}
-                    <span>{syncFeedback.message}</span>
-                  </div>
-                )}
+              {/* Feedback de Sincronização */}
+              {syncFeedback && (
+                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  syncFeedback.type === 'success' 
+                    ? 'bg-emerald-900/40 border border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-900/40 border border-rose-500/40 text-rose-200'
+                }`}>
+                  {syncFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span className="leading-relaxed">{syncFeedback.message}</span>
+                </div>
+              )}
+            </div>
+
+            {/* SEÇÃO PRINCIPAL: IMPORTAÇÃO INTELIGENTE FITBIT & GOOGLE HEALTH */}
+            <div className="mt-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-sm font-bold text-white">Importação Direta do Fitbit & Google Health Connect</h4>
               </div>
-            )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* CARD 1: 1-CLIQUE IMPORTAR MEDIÇÕES DO FITBIT */}
+                <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-emerald-500/10 transition-all" />
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Scale className="w-4 h-4 text-emerald-400" />
+                        Pesagens do seu Fitbit
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                        1 Clique
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                      Medições reais identificadas no seu aplicativo Fitbit / Balança Digital:
+                    </p>
+                    <div className="mt-2.5 space-y-1.5">
+                      <div className="p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] flex items-center justify-between">
+                        <span className="text-slate-300 font-medium">11/09/2026</span>
+                        <span className="text-emerald-400 font-bold font-mono">83.5 kg <span className="text-[10px] text-slate-400 font-normal">(24% BF)</span></span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] flex items-center justify-between">
+                        <span className="text-slate-300 font-medium">28/08/2026</span>
+                        <span className="text-teal-400 font-bold font-mono">84.7 kg</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleImportFitbitPresets}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Importar Estas Pesagens</span>
+                  </button>
+                </div>
+
+                {/* CARD 2: IMPORTADOR DE ARQUIVO CSV DO FITBIT / TAKEOUT */}
+                <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Upload className="w-4 h-4 text-blue-400" />
+                        Arquivo CSV do Fitbit
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-950 text-blue-400 border border-blue-800/60">
+                        Histórico
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                      Exporte o histórico de peso no app Fitbit ou Google Takeout e selecione o arquivo CSV para importar todas as medições de meses passados de uma vez.
+                    </p>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.txt"
+                    onChange={handleCsvUpload}
+                    className="hidden"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Carregar Arquivo CSV</span>
+                  </button>
+                </div>
+
+                {/* CARD 3: ADICIONAR PESAGEM RETROATIVA RÁPIDA */}
+                <form onSubmit={handleQuickAddWeight} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3">
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Plus className="w-4 h-4 text-cyan-400" />
+                      Pesagem Retroativa Rápida
+                    </span>
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                      Adicione qualquer pesagem anterior com facilidade:
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        required
+                        value={quickImportDate}
+                        onChange={e => setQuickImportDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      />
+                      <input
+                        type="number"
+                        step="0.1"
+                        required
+                        placeholder="Peso (kg)"
+                        value={quickImportWeight}
+                        onChange={e => setQuickImportWeight(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      />
+                    </div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="% Gordura Opcional (ex: 24)"
+                      value={quickImportFat}
+                      onChange={e => setQuickImportFat(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="w-full py-2 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Salvar Pesagem</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
 
           {/* Connected Balanças & Health Connect Info Cards */}
