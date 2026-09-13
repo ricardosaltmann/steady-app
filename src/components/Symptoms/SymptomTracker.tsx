@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SymptomLog, UserProfile, Injection, GoogleHealthSyncConfig } from '../../types';
 import { googleFitSync, HealthImportEntry } from '../../lib/googleFitSync';
 import { storage } from '../../lib/storage';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { 
   Heart, 
   Plus, 
@@ -116,15 +117,63 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [hasOAuthToken, setHasOAuthToken] = useState(false);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [quickImportDate, setQuickImportDate] = useState(new Date().toISOString().slice(0, 10));
   const [quickImportWeight, setQuickImportWeight] = useState('');
   const [quickImportFat, setQuickImportFat] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    googleFitSync.hasProviderToken().then(hasToken => {
-      setHasOAuthToken(hasToken);
-    });
+    const checkGoogleAuth = async () => {
+      if (!isSupabaseConfigured()) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const isGoogle = session?.user?.app_metadata?.provider === 'google' ||
+                         session?.user?.identities?.some((id: any) => id.provider === 'google') ||
+                         !!session?.provider_token;
+        setIsGoogleUser(Boolean(isGoogle));
+        if (isGoogle) {
+          setHasOAuthToken(true);
+          if (session?.user?.email) {
+            const currentCfg = storage.getGoogleHealthConfig();
+            if (!currentCfg.connected || currentCfg.email !== session.user.email) {
+              const updated = googleFitSync.linkAccountEmail(session.user.email);
+              setGoogleConfig(updated);
+            }
+          }
+        } else {
+          const hasToken = await googleFitSync.hasProviderToken();
+          setHasOAuthToken(hasToken);
+        }
+      } catch (err) {
+        console.warn('Error checking google session in SymptomTracker:', err);
+      }
+    };
+
+    checkGoogleAuth();
+
+    if (isSupabaseConfigured()) {
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const isGoogle = session?.user?.app_metadata?.provider === 'google' ||
+                         session?.user?.identities?.some((id: any) => id.provider === 'google') ||
+                         !!session?.provider_token;
+        setIsGoogleUser(Boolean(isGoogle));
+        if (isGoogle) {
+          setHasOAuthToken(true);
+          if (session?.user?.email) {
+            const currentCfg = storage.getGoogleHealthConfig();
+            if (!currentCfg.connected || currentCfg.email !== session.user.email) {
+              const updated = googleFitSync.linkAccountEmail(session.user.email);
+              setGoogleConfig(updated);
+            }
+          }
+        }
+      });
+
+      return () => {
+        authListener?.subscription?.unsubscribe();
+      };
+    }
   }, []);
 
   // Filter and sort weight entries
@@ -255,9 +304,11 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
       }
-      setSyncFeedback({ type: res.success ? 'success' : 'error', message: res.message });
+      if (res.success || !isGoogleUser) {
+        setSyncFeedback({ type: res.success ? 'success' : 'error', message: res.message });
+      }
       setGoogleConfig(storage.getGoogleHealthConfig());
-      setHasOAuthToken(res.hasOAuthToken);
+      setHasOAuthToken(res.hasOAuthToken || isGoogleUser);
     } catch (err: any) {
       setSyncFeedback({ type: 'error', message: 'Erro ao sincronizar: ' + err.message });
     } finally {
@@ -924,7 +975,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
 
             {/* Status da Conexão & Formulários de Vinculação */}
             <div className="mt-5 p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-4">
-              {googleConfig.connected ? (
+              {googleConfig.connected || isGoogleUser ? (
                 /* ESTADO: CONECTADO */
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -936,8 +987,8 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                       <div>
                         <div className="text-xs font-bold text-white flex items-center gap-2 flex-wrap">
                           <span>Conta Vinculada:</span>
-                          <span className="text-emerald-300 font-mono">{googleConfig.email}</span>
-                          {hasOAuthToken ? (
+                          <span className="text-emerald-300 font-mono">{googleConfig.email || (isGoogleUser ? 'Google Conectado' : '')}</span>
+                          {(hasOAuthToken || isGoogleUser) ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
                               OAuth Cloud Ativo
                             </span>
@@ -986,7 +1037,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                     </div>
                   </div>
 
-                  {!hasOAuthToken && (
+                  {!hasOAuthToken && !isGoogleUser && (
                     <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <span className="text-xs font-semibold text-white">Ativar Conexão Direta de Nuvem Google</span>
@@ -1082,7 +1133,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
               )}
 
               {/* Feedback de Sincronização */}
-              {syncFeedback && (
+              {syncFeedback && !(isGoogleUser && syncFeedback.type === 'error' && syncFeedback.message.toLowerCase().includes('token oauth')) && (
                 <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
                   syncFeedback.type === 'success' 
                     ? 'bg-emerald-900/40 border border-emerald-500/40 text-emerald-200'

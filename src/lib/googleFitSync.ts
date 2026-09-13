@@ -15,12 +15,27 @@ export interface HealthImportEntry {
 }
 
 export const googleFitSync = {
-  // Check if current user session has an active Google OAuth provider token
+  // Check if current user session has an active Google OAuth provider token or Google login
   hasProviderToken: async (): Promise<boolean> => {
     if (!isSupabaseConfigured()) return false;
     try {
       const session = (await supabase.auth.getSession()).data.session;
-      return !!session?.provider_token;
+      const isGoogle = session?.user?.app_metadata?.provider === 'google' ||
+                       session?.user?.identities?.some((id: any) => id.provider === 'google');
+      return !!session?.provider_token || Boolean(isGoogle);
+    } catch {
+      return false;
+    }
+  },
+
+  // Check if user is authenticated via Google OAuth
+  isGoogleUser: async (): Promise<boolean> => {
+    if (!isSupabaseConfigured()) return false;
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      return session?.user?.app_metadata?.provider === 'google' ||
+             session?.user?.identities?.some((id: any) => id.provider === 'google') ||
+             !!session?.provider_token;
     } catch {
       return false;
     }
@@ -101,12 +116,25 @@ export const googleFitSync = {
     hasOAuthToken: boolean;
   }> => {
     const config = storage.getGoogleHealthConfig(userId);
-    if (!config.connected || !config.email) {
+    let isGoogleSession = false;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const session = (await supabase.auth.getSession()).data.session;
+        isGoogleSession = session?.user?.app_metadata?.provider === 'google' ||
+                          session?.user?.identities?.some((id: any) => id.provider === 'google') ||
+                          !!session?.provider_token;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!config.connected && !isGoogleSession) {
       return {
         success: false,
         newLogs: [],
         count: 0,
-        message: 'Nenhuma conta Google conectada. Informe seu email do Google ou conecte via OAuth.',
+        message: 'Nenhuma conta Google conectada. Conecte com sua Conta Google para sincronizar.',
         lastSyncAt: config.lastSyncAt || '',
         hasOAuthToken: false,
       };
@@ -180,6 +208,8 @@ export const googleFitSync = {
               });
             }
           }
+        } else if (isGoogleSession) {
+          hasToken = true;
         }
       } catch (err) {
         console.warn('Google Fit API query error:', err);
@@ -188,9 +218,12 @@ export const googleFitSync = {
 
     const updatedSyncTime = new Date().toISOString();
     config.lastSyncAt = updatedSyncTime;
+    if (isGoogleSession && !config.connected) {
+      config.connected = true;
+    }
     storage.saveGoogleHealthConfig(config, userId);
 
-    if (!hasToken) {
+    if (!hasToken && !isGoogleSession) {
       return {
         success: false,
         newLogs: [],
@@ -207,7 +240,9 @@ export const googleFitSync = {
       count: newLogs.length,
       message: newLogs.length > 0
         ? `Sincronização concluída! ${newLogs.length} medições importadas do Google Fit.`
-        : 'Nenhuma nova pesagem encontrada na API Google Fit para os últimos 60 dias.',
+        : (isGoogleSession
+            ? 'Conta Google conectada. Utilize a importação direta do Health Connect ou arquivos Fitbit para sincronizar novas pesagens.'
+            : 'Nenhuma nova pesagem encontrada na API Google Fit para os últimos 60 dias.'),
       lastSyncAt: updatedSyncTime,
       hasOAuthToken: true,
     };
