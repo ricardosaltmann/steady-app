@@ -318,15 +318,18 @@ export const auth = {
 
     if (isSupabaseConfigured()) {
       try {
+        // Garantir que o link do e-mail NUNCA aponte para localhost
+        const redirectTo = 'https://willowy-naiad-b45d00.netlify.app';
+
         const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: window.location.origin,
+          redirectTo,
         });
         if (error) {
           return { success: false, error: error.message, message: '' };
         }
         return { 
           success: true, 
-          message: `Instruções de recuperação foram enviadas para ${cleanEmail}. Verifique sua caixa de entrada e spam.` 
+          message: `Código/link de recuperação enviado para ${cleanEmail}. Você pode inserir o código de verificação recebido diretamente aqui ou abrir o link.` 
         };
       } catch (err: any) {
         return { success: false, error: err.message || 'Erro ao conectar ao serviço de autenticação.', message: '' };
@@ -344,6 +347,80 @@ export const auth = {
     }
 
     return { success: false, error: 'Nenhum usuário encontrado com este e-mail.', message: '' };
+  },
+
+  verifyOtpAndResetPassword: async (
+    email: string,
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanToken = token.trim();
+
+    if (!cleanToken) {
+      return { success: false, error: 'Por favor, informe o código de verificação recebido no e-mail.' };
+    }
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'A nova senha deve ter no mínimo 6 caracteres.' };
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token: cleanToken,
+          type: 'recovery',
+        });
+
+        if (error) {
+          return { success: false, error: error.message || 'Código de verificação inválido ou expirado.' };
+        }
+
+        // Token validado com sucesso, atualizar para a nova senha
+        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+        if (updateError) {
+          return { success: false, error: updateError.message };
+        }
+
+        if (data.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+          const userAccount: UserAccount = {
+            id: data.user.id,
+            name: profile?.name || data.user.user_metadata?.name || splitEmail(cleanEmail),
+            email: cleanEmail,
+            phone: profile?.phone || data.user.user_metadata?.phone,
+            age: profile?.age || data.user.user_metadata?.age,
+            gender: profile?.gender || data.user.user_metadata?.gender || 'male',
+            selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories || ['steroid', 'peptide'],
+            createdAt: data.user.created_at,
+            therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
+            isAdmin: isUserAdmin(cleanEmail, profile?.is_admin),
+          };
+
+          localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
+          localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(userAccount));
+          return { success: true, user: userAccount };
+        }
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Erro ao validar código no Supabase.' };
+      }
+    }
+
+    // Local fallback
+    const users = auth.getUsers();
+    const found = users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (found) {
+      const updated = auth.updateProfile(found.id, { passwordHash: newPassword } as any);
+      return { success: true, user: updated || found };
+    }
+
+    return { success: false, error: 'Usuário não encontrado.' };
   },
 
   updatePassword: async (newPassword: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {

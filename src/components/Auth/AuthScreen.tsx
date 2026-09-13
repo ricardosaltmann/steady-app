@@ -102,6 +102,10 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newPasswordSuccess, setNewPasswordSuccess] = useState(false);
 
+  // In-app OTP code recovery states
+  const [otpCode, setOtpCode] = useState('');
+  const [hasSentResetEmail, setHasSentResetEmail] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -170,6 +174,7 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
       const res = await auth.resetPassword(email);
       if (res.success) {
         setResetMessage(res.message);
+        setHasSentResetEmail(true);
       } else {
         setError(res.error || 'Erro ao recuperar senha.');
       }
@@ -177,6 +182,45 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
       setError(err.message || 'Erro inesperado ao solicitar recuperação.');
     } finally {
       setResetLoading(false);
+    }
+  };
+
+  const handleVerifyOtpReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!otpCode.trim()) {
+      setError('Por favor, informe o código de verificação recebido por e-mail.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('As senhas digitadas não coincidem.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await auth.verifyOtpAndResetPassword(email, otpCode, newPassword);
+      if (res.success) {
+        setNewPasswordSuccess(true);
+        setTimeout(() => {
+          if (res.user) {
+            onLoginSuccess(res.user);
+          } else {
+            setIsForgotPassword(false);
+            setResetMessage('Senha atualizada com sucesso! Você já pode entrar.');
+          }
+        }, 1200);
+      } else {
+        setError(res.error || 'Código inválido ou erro ao atualizar a senha.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro inesperado ao redefinir a senha.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -422,16 +466,12 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
                 </h2>
                 <button
                   type="button"
-                  onClick={() => { setIsForgotPassword(false); setError(null); setResetMessage(null); }}
+                  onClick={() => { setIsForgotPassword(false); setError(null); setResetMessage(null); setHasSentResetEmail(false); }}
                   className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
                 >
                   Voltar ao login
                 </button>
               </div>
-
-              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                Informe o seu e-mail cadastrado. Enviaremos o link para redefinir sua senha (no Supabase) ou as instruções locais de acesso.
-              </p>
 
               {error && (
                 <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
@@ -447,8 +487,11 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
                 </div>
               )}
 
-              {!resetMessage ? (
+              {!hasSentResetEmail ? (
                 <form onSubmit={handleResetPassword} className="space-y-4">
+                  <p className="text-xs text-slate-400 mb-2 leading-relaxed">
+                    Informe seu e-mail cadastrado. Você receberá as instruções e o código de verificação para definir sua nova senha diretamente aqui no app.
+                  </p>
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                       <Mail className="w-3.5 h-3.5 text-cyan-400" />
@@ -469,18 +512,112 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
                     disabled={resetLoading}
                     className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    <span>{resetLoading ? 'Solicitando...' : 'Recuperar Minha Senha'}</span>
+                    <span>{resetLoading ? 'Solicitando...' : 'Enviar Código de Recuperação'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
+
+                  <div className="text-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setHasSentResetEmail(true)}
+                      className="text-xs text-cyan-400 hover:underline cursor-pointer"
+                    >
+                      Já recebeu o código por e-mail? Clique aqui para inserir
+                    </button>
+                  </div>
                 </form>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => { setIsForgotPassword(false); setError(null); setResetMessage(null); }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
-                >
-                  Voltar para Tela de Login
-                </button>
+                <form onSubmit={handleVerifyOtpReset} className="space-y-3.5">
+                  <p className="text-xs text-slate-400 mb-2 leading-relaxed">
+                    Insira o código de verificação recebido no seu e-mail e escolha sua nova senha:
+                  </p>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                      E-mail
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="seu.email@exemplo.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                      Código de Verificação do E-mail
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: 123456 ou token"
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-amber-500 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors tracking-widest font-mono text-center font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                      Nova Senha (mínimo 6 caracteres)
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Digite sua nova senha"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                      Confirmar Nova Senha
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Repita a nova senha"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 hover:from-emerald-400 hover:to-cyan-300 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+                  >
+                    <span>{loading ? 'Validando e alterando senha...' : 'Confirmar e Redefinir Senha'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { setHasSentResetEmail(false); setError(null); }}
+                      className="hover:text-cyan-400 transition-colors cursor-pointer"
+                    >
+                      ← Reenviar código
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsForgotPassword(false); setError(null); }}
+                      className="hover:text-white transition-colors cursor-pointer"
+                    >
+                      Voltar ao Login
+                    </button>
+                  </div>
+                </form>
               )}
             </div>
           ) : (
