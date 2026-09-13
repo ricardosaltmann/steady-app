@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { auth } from '../../lib/auth';
 import { storage } from '../../lib/storage';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { UserAccount, CompoundCategory } from '../../types';
 import { 
   Activity, 
@@ -96,8 +97,68 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [selectedCategories, setSelectedCategories] = useState<CompoundCategory[]>(['peptide', 'steroid']);
 
+  const [isSettingNewPassword, setIsSettingNewPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPasswordSuccess, setNewPasswordSuccess] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Detect Supabase recovery hash on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+      setIsSettingNewPassword(true);
+    }
+
+    if (isSupabaseConfigured() && supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsSettingNewPassword(true);
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (newPassword.length < 6) {
+      setError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('As senhas digitadas não coincidem.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await auth.updatePassword(newPassword);
+      if (res.success) {
+        setNewPasswordSuccess(true);
+        window.history.replaceState(null, '', window.location.pathname);
+        setTimeout(() => {
+          if (res.user) {
+            onLoginSuccess(res.user);
+          } else {
+            setIsSettingNewPassword(false);
+            setIsForgotPassword(false);
+            setResetMessage('Senha atualizada com sucesso! Você já pode entrar com sua nova senha.');
+          }
+        }, 1200);
+      } else {
+        setError(res.error || 'Erro ao redefinir a senha.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro inesperado ao definir nova senha.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,7 +319,7 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
         </div>
 
         {/* 1-Click Fast Demo Card for Testers (shown on login tab) */}
-        {!isRegister && !isForgotPassword && (
+        {!isRegister && !isForgotPassword && !isSettingNewPassword && (
           <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-slate-900 to-emerald-950/40 border border-cyan-500/30 shadow-lg shadow-cyan-950/40 relative overflow-hidden">
             <div className="flex items-start justify-between gap-3 mb-2">
               <div>
@@ -284,7 +345,75 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
 
         {/* Main Auth Form Box */}
         <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
-          {isForgotPassword ? (
+          {isSettingNewPassword ? (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-emerald-400" />
+                  Definir Nova Senha
+                </h2>
+              </div>
+
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                Token de recuperação validado com sucesso! Digite sua nova senha de acesso abaixo.
+              </p>
+
+              {error && (
+                <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {newPasswordSuccess ? (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                  <span className="font-medium">Senha alterada com sucesso! Conectando à sua conta...</span>
+                </div>
+              ) : (
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      Nova Senha
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Mínimo 6 caracteres"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                      Confirmar Nova Senha
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Repita a nova senha"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 hover:from-emerald-400 hover:to-cyan-300 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>{loading ? 'Salvando nova senha...' : 'Salvar Nova Senha e Acessar'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : isForgotPassword ? (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">

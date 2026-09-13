@@ -345,6 +345,58 @@ export const auth = {
 
     return { success: false, error: 'Nenhum usuário encontrado com este e-mail.', message: '' };
   },
+
+  updatePassword: async (newPassword: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'A nova senha deve ter pelo menos 6 caracteres.' };
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+          return { success: false, error: error.message };
+        }
+
+        if (data.user) {
+          const cleanEmail = data.user.email?.toLowerCase() || '';
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+          const userAccount: UserAccount = {
+            id: data.user.id,
+            name: profile?.name || data.user.user_metadata?.name || splitEmail(cleanEmail),
+            email: cleanEmail,
+            phone: profile?.phone || data.user.user_metadata?.phone,
+            age: profile?.age || data.user.user_metadata?.age,
+            gender: profile?.gender || data.user.user_metadata?.gender || 'male',
+            selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories || ['steroid', 'peptide'],
+            createdAt: data.user.created_at,
+            therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
+            isAdmin: isUserAdmin(cleanEmail, profile?.is_admin),
+          };
+
+          localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
+          localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(userAccount));
+          return { success: true, user: userAccount };
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Erro ao redefinir a senha no Supabase.' };
+      }
+    }
+
+    // Local fallback
+    const current = auth.getCurrentUser();
+    if (current) {
+      const updated = auth.updateProfile(current.id, { passwordHash: newPassword } as any);
+      return { success: true, user: updated || current };
+    }
+
+    return { success: true };
+  },
 };
 
 function splitEmail(email: string): string {
