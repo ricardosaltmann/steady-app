@@ -42,6 +42,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [goal, setGoal] = useState(profile?.goal || '');
   const [phone, setPhone] = useState(currentUser?.phone || profile?.phone || '');
   const [age, setAge] = useState(currentUser?.age ? String(currentUser.age) : profile?.age ? String(profile.age) : '');
+  const [heightCm, setHeightCm] = useState(profile?.heightCm ? String(profile.heightCm) : currentUser?.heightCm ? String(currentUser.heightCm) : '');
+  const [weightKg, setWeightKg] = useState(profile?.weightKg ? String(profile.weightKg) : currentUser?.weightKg ? String(currentUser.weightKg) : '');
+  const [targetWeightKg, setTargetWeightKg] = useState(profile?.targetWeightKg ? String(profile.targetWeightKg) : currentUser?.targetWeightKg ? String(currentUser.targetWeightKg) : '');
+  const [bodyFat, setBodyFat] = useState(profile?.bodyFatPercent ? String(profile.bodyFatPercent) : currentUser?.bodyFatPercent ? String(currentUser.bodyFatPercent) : '');
+  const [activityLevel, setActivityLevel] = useState<'sedentary' | 'moderate' | 'active' | 'athlete'>(profile?.activityLevel || currentUser?.activityLevel || 'moderate');
+  const [marketingConsent, setMarketingConsent] = useState(profile?.marketingConsent ?? currentUser?.marketingConsent ?? true);
 
   // Synchronize state when modal opens or profile/currentUser updates
   useEffect(() => {
@@ -52,6 +58,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setGoal(profile?.goal || '');
       setPhone(currentUser?.phone || profile?.phone || '');
       setAge(currentUser?.age ? String(currentUser.age) : profile?.age ? String(profile.age) : '');
+      setHeightCm(profile?.heightCm ? String(profile.heightCm) : currentUser?.heightCm ? String(currentUser.heightCm) : '');
+      setWeightKg(profile?.weightKg ? String(profile.weightKg) : currentUser?.weightKg ? String(currentUser.weightKg) : '');
+      setTargetWeightKg(profile?.targetWeightKg ? String(profile.targetWeightKg) : currentUser?.targetWeightKg ? String(currentUser.targetWeightKg) : '');
+      setBodyFat(profile?.bodyFatPercent ? String(profile.bodyFatPercent) : currentUser?.bodyFatPercent ? String(currentUser.bodyFatPercent) : '');
+      setActivityLevel(profile?.activityLevel || currentUser?.activityLevel || 'moderate');
+      setMarketingConsent(profile?.marketingConsent ?? currentUser?.marketingConsent ?? true);
     }
   }, [isOpen, profile, currentUser, initialTab]);
 
@@ -79,12 +91,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       goal: goal.trim(),
       phone: phone.trim() || undefined,
       age: age ? parseInt(age) : undefined,
+      heightCm: heightCm ? parseFloat(heightCm) : undefined,
+      weightKg: weightKg ? parseFloat(weightKg) : undefined,
+      targetWeightKg: targetWeightKg ? parseFloat(targetWeightKg) : undefined,
+      bodyFatPercent: bodyFat ? parseFloat(bodyFat) : undefined,
+      activityLevel,
+      marketingConsent,
     };
     const updatedAccount: Partial<UserAccount> = {
       name: name.trim(),
       gender,
       phone: phone.trim() || undefined,
       age: age ? parseInt(age) : undefined,
+      heightCm: heightCm ? parseFloat(heightCm) : undefined,
+      weightKg: weightKg ? parseFloat(weightKg) : undefined,
+      targetWeightKg: targetWeightKg ? parseFloat(targetWeightKg) : undefined,
+      bodyFatPercent: bodyFat ? parseFloat(bodyFat) : undefined,
+      goal: goal.trim() || undefined,
+      activityLevel,
+      marketingConsent,
     };
     onSaveProfile(updatedProfile, updatedAccount);
     alert('Perfil atualizado com sucesso!');
@@ -443,6 +468,92 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   placeholder="ex: Otimização hormonal, controle glicêmico, manutenção da composição corporal e longevidade"
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium resize-none"
                 />
+              </div>
+
+              {/* Biometria & Metas de Saúde */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2.5">
+                  Biometria & Metas de Saúde
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400">Altura (cm)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={heightCm}
+                      onChange={e => setHeightCm(e.target.value)}
+                      placeholder="ex: 178"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400">Peso Atual (kg)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={weightKg}
+                      onChange={e => setWeightKg(e.target.value)}
+                      placeholder="ex: 82.5"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400">Meta Peso (kg)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={targetWeightKg}
+                      onChange={e => setTargetWeightKg(e.target.value)}
+                      placeholder="ex: 80.0"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400">% Gordura (BF)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={bodyFat}
+                      onChange={e => setBodyFat(e.target.value)}
+                      placeholder="ex: 14.5"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Nível de Atividade & Rotina */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Nível de Atividade Física</label>
+                  <select
+                    value={activityLevel}
+                    onChange={e => setActivityLevel(e.target.value as any)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                  >
+                    <option value="sedentary">Sedentário (pouco ou nenhum exercício)</option>
+                    <option value="moderate">Moderado (treina 3-4x por semana)</option>
+                    <option value="active">Ativo (treina 5-6x por semana)</option>
+                    <option value="athlete">Atleta / Treinos Intensos Diários</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Comunicações & Mailing</label>
+                  <label className="flex items-center gap-2 p-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-300 cursor-pointer hover:bg-slate-800/50">
+                    <input
+                      type="checkbox"
+                      checked={marketingConsent}
+                      onChange={e => setMarketingConsent(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700 focus:ring-blue-500"
+                    />
+                    <span className="text-[11px]">Receber relatórios e novidades por e-mail</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end pt-2">

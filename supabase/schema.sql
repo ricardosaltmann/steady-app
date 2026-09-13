@@ -11,11 +11,18 @@ create table if not exists public.profiles (
   phone text,
   age numeric,
   gender text default 'male',
+  birth_date date,
+  height_cm numeric,
+  weight_kg numeric,
+  target_weight_kg numeric,
+  body_fat_percent numeric,
+  goal text,
+  activity_level text default 'moderate',
+  marketing_consent boolean default true,
   selected_categories text[] default array['peptide', 'steroid'],
   therapeutic_goal text default 'male_trt',
   is_admin boolean default false,
-  birth_date date,
-  weight_kg numeric,
+  notes text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -24,7 +31,15 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists phone text;
 alter table public.profiles add column if not exists age numeric;
 alter table public.profiles add column if not exists gender text default 'male';
+alter table public.profiles add column if not exists height_cm numeric;
+alter table public.profiles add column if not exists weight_kg numeric;
+alter table public.profiles add column if not exists target_weight_kg numeric;
+alter table public.profiles add column if not exists body_fat_percent numeric;
+alter table public.profiles add column if not exists goal text;
+alter table public.profiles add column if not exists activity_level text default 'moderate';
+alter table public.profiles add column if not exists marketing_consent boolean default true;
 alter table public.profiles add column if not exists selected_categories text[] default array['peptide', 'steroid'];
+alter table public.profiles add column if not exists notes text;
 
 -- Habilitar RLS em profiles
 alter table public.profiles enable row level security;
@@ -105,7 +120,7 @@ create policy "Usuários gerenciam seus próprios exames"
   on public.labs for all
   using ( auth.uid() = user_id );
 
--- 5. TABELA DE SINTOMAS & BEM-ESTAR
+-- 5. TABELA DE SINTOMAS, BIOMETRIA & BEM-ESTAR (TELEMETRIA COMPLETA PARA IA)
 create table if not exists public.symptoms (
   id text primary key,
   user_id uuid references auth.users on delete cascade not null,
@@ -119,15 +134,56 @@ create table if not exists public.symptoms (
   blood_pressure_systolic int,
   blood_pressure_diastolic int,
   weight_kg numeric,
+  height_cm numeric,
+  body_fat_percent numeric,
+  water_ml numeric,
+  waist_cm numeric,
+  hip_cm numeric,
+  arm_cm numeric,
+  thigh_cm numeric,
+  chest_cm numeric,
   notes text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Garantir colunas biométricas adicionais em symptoms caso já exista
+alter table public.symptoms add column if not exists height_cm numeric;
+alter table public.symptoms add column if not exists body_fat_percent numeric;
+alter table public.symptoms add column if not exists water_ml numeric;
+alter table public.symptoms add column if not exists waist_cm numeric;
+alter table public.symptoms add column if not exists hip_cm numeric;
+alter table public.symptoms add column if not exists arm_cm numeric;
+alter table public.symptoms add column if not exists thigh_cm numeric;
+alter table public.symptoms add column if not exists chest_cm numeric;
+alter table public.symptoms add column if not exists updated_at timestamp with time zone default timezone('utc'::text, now());
 
 alter table public.symptoms enable row level security;
 
 create policy "Usuários gerenciam seus próprios sintomas"
   on public.symptoms for all
   using ( auth.uid() = user_id );
+
+create index if not exists idx_symptoms_user_date on public.symptoms (user_id, date desc);
+
+-- 6. TABELA DE HIDRATAÇÃO (REGISTRO DETALHADO DE CONSUMO DE ÁGUA)
+create table if not exists public.water_logs (
+  id text primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  date date not null,
+  time text not null,
+  amount_ml numeric not null,
+  target_ml numeric default 2500,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.water_logs enable row level security;
+
+create policy "Usuários gerenciam seus próprios registros de hidratação"
+  on public.water_logs for all
+  using ( auth.uid() = user_id );
+
+create index if not exists idx_water_logs_user_date on public.water_logs (user_id, date desc);
 
 -- 6. TABELA DE COMPOSTOS GLOBAIS (Gerenciados pelo Admin)
 create table if not exists public.global_compounds (

@@ -124,6 +124,40 @@ export function App() {
           itemsToPushToCloud.forEach(s => supabaseSync.saveSymptom(s, uid));
         }
       });
+
+      // Profile sync from Supabase
+      supabaseSync.getProfile(uid).then(cloudProfile => {
+        if (cloudProfile) {
+          const currentLocal = storage.getProfile(uid);
+          const mergedProfile: UserProfile = {
+            ...currentLocal,
+            ...cloudProfile,
+          };
+          setProfile(mergedProfile);
+          storage.saveProfile(mergedProfile, uid);
+        }
+      });
+
+      // Today's water sync from Supabase
+      const today = new Date().toISOString().slice(0, 10);
+      supabaseSync.getWaterData(today, uid).then(cloudWater => {
+        if (cloudWater && cloudWater.entries.length > 0) {
+          const localWater = storage.getWaterData(today, uid);
+          const existingIds = new Set(localWater.entries.map(e => e.id));
+          const newFromCloud = cloudWater.entries.filter(e => !existingIds.has(e.id));
+          if (newFromCloud.length > 0) {
+            const mergedEntries = [...localWater.entries, ...newFromCloud];
+            const totalMl = mergedEntries.reduce((acc, curr) => acc + curr.amountMl, 0);
+            const merged: DailyWaterData = {
+              ...localWater,
+              totalMl,
+              entries: mergedEntries,
+            };
+            setWaterData(merged);
+            storage.saveWaterData(merged, uid);
+          }
+        }
+      });
     }
   };
 
@@ -283,11 +317,16 @@ export function App() {
 
   // Symptom Handlers
   const handleSaveSymptom = (log: SymptomLog) => {
-    const updated = [log, ...symptoms];
+    const today = new Date().toISOString().slice(0, 10);
+    const enrichedLog: SymptomLog = {
+      ...log,
+      waterMl: log.waterMl !== undefined ? log.waterMl : (log.date === today ? waterData.totalMl : undefined),
+    };
+    const updated = [enrichedLog, ...symptoms.filter(s => s.id !== enrichedLog.id)];
     storage.saveSymptoms(updated, currentUser?.id);
     setSymptoms(updated);
     if (currentUser?.id) {
-      supabaseSync.saveSymptom(log, currentUser.id);
+      supabaseSync.saveSymptom(enrichedLog, currentUser.id);
     }
   };
 
@@ -304,11 +343,17 @@ export function App() {
   const handleAddWater = (amountMl: number, targetMl?: number) => {
     const updated = storage.addWaterLog(amountMl, targetMl, undefined, currentUser?.id);
     setWaterData(updated);
+    if (currentUser?.id && updated.entries[0]) {
+      supabaseSync.saveWaterEntry(updated.entries[0], updated.date, updated.targetMl, currentUser.id);
+    }
   };
 
   const handleDeleteWaterEntry = (id: string) => {
     const updated = storage.deleteWaterLog(id, undefined, currentUser?.id);
     setWaterData(updated);
+    if (currentUser?.id) {
+      supabaseSync.deleteWaterEntry(id, currentUser.id);
+    }
   };
 
   const handleUpdateWaterTarget = (targetMl: number) => {
@@ -327,16 +372,25 @@ export function App() {
     storage.saveProfile(newProfile, currentUser?.id);
     setProfile(newProfile);
     if (currentUser) {
-      const updated = auth.updateProfile(currentUser.id, {
+      const mergedAccount: Partial<UserAccount> = {
         name: newProfile.name,
         phone: newProfile.phone,
         age: newProfile.age,
         gender: newProfile.gender,
+        heightCm: newProfile.heightCm,
+        weightKg: newProfile.weightKg,
+        targetWeightKg: newProfile.targetWeightKg,
+        bodyFatPercent: newProfile.bodyFatPercent,
+        goal: newProfile.goal,
+        activityLevel: newProfile.activityLevel,
+        marketingConsent: newProfile.marketingConsent,
         ...updatedAccount,
-      });
+      };
+      const updated = auth.updateProfile(currentUser.id, mergedAccount);
       if (updated) {
         setCurrentUser(updated);
       }
+      supabaseSync.saveProfile(newProfile, currentUser.id);
     }
   };
 

@@ -1,4 +1,4 @@
-﻿export type CompoundCategory = 
+export type CompoundCategory = 
   | 'steroid'     // Esteroides Anabolizantes & Androgênicos (TRT, Masteron, Deca, Primo, Trembo, etc.)
   | 'peptide'     // Peptídeos & Agonistas GLP-1 (Tirzepatida, Semaglutida, BPC-157, CJC, TB-500, etc.)
   | 'estrogen'    // Hormônios Femininos / HRT (Estradiol, Progesterona)
@@ -132,6 +132,7 @@ export interface SymptomLog {
   weightKg?: number;
   heightCm?: number;
   bodyFatPercent?: number; // % de gordura corporal
+  waterMl?: number;        // Ingestão de água acumulada no dia em mL
   waistCm?: number;        // Cintura (cm)
   hipCm?: number;          // Quadril (cm)
   armCm?: number;          // Braço (cm)
@@ -150,8 +151,12 @@ export interface UserProfile {
   heightCm?: number;
   weightKg?: number;
   targetWeightKg?: number;
+  bodyFatPercent?: number;
   goal?: string;
+  activityLevel?: 'sedentary' | 'moderate' | 'active' | 'athlete';
+  marketingConsent?: boolean;
   selectedCategories?: CompoundCategory[];
+  notes?: string;
 }
 
 export interface UserAccount {
@@ -161,6 +166,13 @@ export interface UserAccount {
   phone?: string;
   age?: number;
   gender?: 'male' | 'female' | 'other';
+  heightCm?: number;
+  weightKg?: number;
+  targetWeightKg?: number;
+  bodyFatPercent?: number;
+  goal?: string;
+  activityLevel?: 'sedentary' | 'moderate' | 'active' | 'athlete';
+  marketingConsent?: boolean;
   selectedCategories?: CompoundCategory[];
   passwordHash?: string;
   createdAt: string;
