@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SteadySync</string>
+    <string name="title_activity_main">SteadySync</string>
+    <string name="package_name">com.steadysync.app</string>
+    <string name="custom_url_scheme">com.steadysync.app</string>
+</resources>
