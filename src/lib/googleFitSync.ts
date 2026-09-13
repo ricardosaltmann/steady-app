@@ -107,7 +107,8 @@ export const googleFitSync = {
     existingSymptoms: SymptomLog[],
     _currentWeightKg: number = 82.0,
     heightCm: number = 175,
-    userId?: string
+    userId?: string,
+    prefetchedRecords?: any[]
   ): Promise<{
     success: boolean;
     newLogs: SymptomLog[];
@@ -146,33 +147,46 @@ export const googleFitSync = {
     const newLogs: SymptomLog[] = [];
     let hasToken = false;
 
-    // 1. Tentar leitura nativa do Android Health Connect em tempo de execução
-    if (Capacitor.isNativePlatform()) {
+    // Processar registros pré-obtidos via Health Connect
+    if (prefetchedRecords && prefetchedRecords.length > 0) {
+      console.log('[Health Connect] Processando registros pré-obtidos:', prefetchedRecords.length);
+      hasToken = true;
+      prefetchedRecords.forEach((rec: any) => {
+        const w = rec?.weightKg ?? rec?.weight?.inKilograms ?? rec?.value;
+        const dateStr = rec?.time ? rec.time.slice(0, 10) : rec?.startTime?.slice(0, 10);
+        if (w && dateStr && !existingDates.has(dateStr)) {
+          newLogs.push({
+            id: 'symp_hc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            date: dateStr,
+            weightKg: parseFloat(Number(w).toFixed(1)),
+            heightCm,
+            energy: 4,
+            libido: 4,
+            mood: 4,
+            sleep: 4,
+            acne: 1,
+            waterRetention: 1,
+            notes: 'Sincronizado via Health Connect Android',
+            updatedAt: new Date().toISOString(),
+          });
+          existingDates.add(dateStr);
+        }
+      });
+    }
+
+    // 1. Tentar leitura nativa do Android Health Connect em tempo de execução se ainda não veio pré-obtido
+    if (Capacitor.isNativePlatform() && (!prefetchedRecords || prefetchedRecords.length === 0)) {
       try {
         console.log('[Health Connect] Verificando runtime nativo do Health Connect...');
         const plugins = (window as any).Capacitor?.Plugins;
         const HealthConnect = plugins?.HealthConnect || plugins?.CapacitorHealthConnect;
 
         if (HealthConnect) {
-          console.log('[Health Connect] Solicitando permissões em tempo de execução...');
-          if (typeof HealthConnect.requestHealthPermissions === 'function') {
-            await HealthConnect.requestHealthPermissions({
-              read: ['Weight', 'Height', 'BodyFat']
-            });
-          } else if (typeof HealthConnect.requestPermissions === 'function') {
-            await HealthConnect.requestPermissions({
-              permissions: [
-                'android.permission.health.READ_WEIGHT',
-                'android.permission.health.READ_HEIGHT',
-                'android.permission.health.READ_BODY_FAT'
-              ]
-            });
-          }
-
-          console.log('[Health Connect] Lendo registros de peso e composição corporal...');
-          const startTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+          // Janela exata de 60 dias atrás até agora em formato ISO 8601
+          const startTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
           const endTime = new Date().toISOString();
 
+          console.log('[Health Connect] Lendo registros de peso (ISO 60 dias):', startTime, 'até', endTime);
           let nativeRecords: any[] = [];
           if (typeof HealthConnect.readRecords === 'function') {
             const res = await HealthConnect.readRecords({
@@ -190,6 +204,9 @@ export const googleFitSync = {
           }
 
           console.log('[Health Connect] Registros obtidos nativamente:', nativeRecords.length);
+          if (nativeRecords.length > 0) {
+            hasToken = true;
+          }
           nativeRecords.forEach((rec: any) => {
             const w = rec?.weight?.inKilograms ?? rec?.weightKg ?? rec?.value;
             const dateStr = rec?.time ? rec.time.slice(0, 10) : rec?.startTime?.slice(0, 10);

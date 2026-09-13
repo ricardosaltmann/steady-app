@@ -10,7 +10,7 @@ interface HealthConnectPlugin {
   requestPermissions(options?: { permissions?: string[] }): Promise<any>;
   checkPermissions(): Promise<any>;
   openHealthConnectSettings(): Promise<void>;
-  readRecords?(options: any): Promise<any>;
+  readRecords(options: any): Promise<any>;
 }
 
 const HealthConnect = registerPlugin<HealthConnectPlugin>('HealthConnect');
@@ -307,6 +307,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   };
 
   // Sync Now with connected Google Account / Health Connect
+  // Sync Now with connected Google Account / Health Connect
   const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncFeedback(null);
@@ -326,8 +327,37 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
         }
       }
 
-      // 2. Executar a busca / leitura de dados (Health Connect + Google Fit)
-      const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight);
+      // 2. Definir janela de tempo de exatamente 60 dias atrás até agora em formato ISO 8601
+      const startTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      const endTime = new Date().toISOString();
+
+      let hcRecords: any[] = [];
+      if (Capacitor.isNativePlatform()) {
+        try {
+          console.log('[Health Connect] Executando readRecords (janela de 60 dias ISO):', startTime, 'até', endTime);
+          const result = await HealthConnect.readRecords({
+            type: 'Weight',
+            timeRangeFilter: {
+              type: 'between',
+              startTime,
+              endTime,
+            }
+          });
+
+          // Log visual de debug solicitado pelo usuário
+          const count = result?.records?.length ?? 0;
+          alert("Registros encontrados: " + JSON.stringify(count));
+          console.log('[Health Connect] Resultado de readRecords:', result);
+
+          hcRecords = result?.records || [];
+        } catch (readErr: any) {
+          console.error('[Health Connect Error] Erro ao executar readRecords:', readErr);
+          alert("Erro no readRecords: " + (readErr?.message || JSON.stringify(readErr)));
+        }
+      }
+
+      // 3. Executar a busca / leitura de dados (Health Connect + Google Fit)
+      const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight, undefined, hcRecords);
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
       }
