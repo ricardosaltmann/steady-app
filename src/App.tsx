@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { storage } from './lib/storage';
 import { auth } from './lib/auth';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { supabaseSync } from './lib/supabaseSync';
 import { mergeCollections } from './lib/syncMerge';
 import { notificationsService, isProtocolDueToday } from './lib/notifications';
@@ -45,6 +47,88 @@ export function App() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+
+  // Deep Link listener for OAuth redirect (steadysync://login-callback)
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupDeepLinkListener = async () => {
+      try {
+        const handler = await CapApp.addListener('appUrlOpen', async (data: { url: string }) => {
+          if (!data?.url) return;
+
+          // Process steadysync:// callback
+          if (data.url.startsWith('steadysync://') || data.url.includes('access_token=') || data.url.includes('code=')) {
+            // 1. If URL has hash with access_token (implicit flow)
+            if (data.url.includes('#access_token') || data.url.includes('access_token=')) {
+              const hashIndex = data.url.indexOf('#');
+              const hashString = hashIndex !== -1 ? data.url.substring(hashIndex + 1) : data.url.split('?')[1] || '';
+              const params = new URLSearchParams(hashString);
+              const accessToken = params.get('access_token');
+              const refreshToken = params.get('refresh_token');
+
+              if (accessToken && refreshToken && isSupabaseConfigured()) {
+                const { data: sessionData, error } = await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+
+                if (!error && sessionData.user && isMounted) {
+                  const cachedUser: UserAccount = {
+                    id: sessionData.user.id,
+                    name: sessionData.user.user_metadata?.name || sessionData.user.email?.split('@')[0] || 'Usuário',
+                    email: sessionData.user.email || '',
+                    gender: sessionData.user.user_metadata?.gender || 'male',
+                    therapeuticGoal: sessionData.user.user_metadata?.therapeutic_goal || 'male_trt',
+                    createdAt: sessionData.user.created_at,
+                    isAdmin: sessionData.user.email?.includes('ricardo') || false,
+                  };
+                  handleLoginSuccess(cachedUser);
+                }
+              }
+            }
+
+            // 2. If URL has authorization code (PKCE flow)
+            if (data.url.includes('code=') && isSupabaseConfigured()) {
+              const queryIndex = data.url.indexOf('?');
+              if (queryIndex !== -1) {
+                const queryString = data.url.substring(queryIndex + 1);
+                const params = new URLSearchParams(queryString);
+                const code = params.get('code');
+                if (code) {
+                  const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
+                  if (!error && sessionData.user && isMounted) {
+                    const cachedUser: UserAccount = {
+                      id: sessionData.user.id,
+                      name: sessionData.user.user_metadata?.name || sessionData.user.email?.split('@')[0] || 'Usuário',
+                      email: sessionData.user.email || '',
+                      gender: sessionData.user.user_metadata?.gender || 'male',
+                      therapeuticGoal: sessionData.user.user_metadata?.therapeutic_goal || 'male_trt',
+                      createdAt: sessionData.user.created_at,
+                      isAdmin: sessionData.user.email?.includes('ricardo') || false,
+                    };
+                    handleLoginSuccess(cachedUser);
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        return () => {
+          handler.remove();
+        };
+      } catch {
+        // Fallback for non-Capacitor environment
+      }
+    };
+
+    setupDeepLinkListener();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load data for active user
   const loadAllData = (targetUserId?: string) => {
