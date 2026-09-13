@@ -3,6 +3,17 @@ import { SymptomLog, UserProfile, Injection, GoogleHealthSyncConfig } from '../.
 import { googleFitSync, HealthImportEntry } from '../../lib/googleFitSync';
 import { storage } from '../../lib/storage';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { registerPlugin, Capacitor } from '@capacitor/core';
+
+interface HealthConnectPlugin {
+  checkAvailability(): Promise<{ available: boolean }>;
+  requestPermissions(options?: { permissions?: string[] }): Promise<any>;
+  checkPermissions(): Promise<any>;
+  openHealthConnectSettings(): Promise<void>;
+  readRecords?(options: any): Promise<any>;
+}
+
+const HealthConnect = registerPlugin<HealthConnectPlugin>('HealthConnect');
 import { 
   Heart, 
   Plus, 
@@ -300,7 +311,22 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
-      console.log('[Health Connect] Iniciando solicitação de permissões e leitura de métricas...');
+      console.log('[Health Connect] Iniciando fluxo de sincronização...');
+
+      // 1. Chamar o método de solicitar permissões nativas (requestPermissions) ANTES de tentar executar o readRecords
+      if (Capacitor.isNativePlatform()) {
+        try {
+          console.log('[Health Connect] Disparando requestPermissions nativo do Capacitor para exibir pop-up...');
+          const permResult = await HealthConnect.requestPermissions({
+            permissions: ['weight', 'bodyFat', 'height']
+          });
+          console.log('[Health Connect] Pop-up respondido pelo usuário:', permResult);
+        } catch (permErr: any) {
+          console.error('[Health Connect Error] Erro ao disparar pop-up de permissão nativa:', permErr);
+        }
+      }
+
+      // 2. Executar a busca / leitura de dados (Health Connect + Google Fit)
       const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight);
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
