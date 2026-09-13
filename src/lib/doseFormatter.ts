@@ -2,47 +2,96 @@ import { Compound, Protocol } from '../types';
 
 /**
  * Formata a dose e unidade para exibição amigável ao usuário.
- * Trata o caso de compostos em mcg (como peptídeos GHRP/GHRH, CJC-1295, etc.)
- * cujo valor armazenado no banco/estado é em miligramas (mg) (ex: 0.1 mg para 100 mcg).
+ * 
+ * Regras:
+ * 1. Se o protocolo/chamada tiver unidade explícita ('mg' ou 'mcg'):
+ *    - Se 'mg': exibe sempre em mg (ex: 1 mg, 2.5 mg, 50 mg).
+ *    - Se 'mcg': se dose >= 1000, entende e exibe como mg (ex: 1000 mcg = 1 mg). Caso contrário, exibe em mcg.
+ * 2. Se não houver unidade explícita especificada:
+ *    - Se a dose for >= 1000: entende como mcg >= 1000 e converte para mg (ex: 1000 -> 1 mg).
+ *    - Se a dose for de 1 em diante (ex: 1, 2.5, 5, 50, 125, 250): entende como mg!
+ *    - Se a dose for menor que 1 (ex: 0.1, 0.25): entende como fração de mg e converte para mcg (0.1 mg -> 100 mcg).
  */
-export function formatCompoundDose(dose: number, unit?: string): {
+export function formatCompoundDose(
+  dose: number,
+  compoundUnit?: string,
+  protocolUnit?: 'mg' | 'mcg'
+): {
   displayValue: number;
   displayUnit: string;
   fullText: string;
 } {
-  const isMcg = unit === 'mcg';
-  if (isMcg) {
-    // Se a dose está salva em mg (ex: 0.1 mg), multiplica por 1000 para mcg
-    // Se o valor já for maior que 20, assume que já está na escala de mcg
-    const val = dose <= 20 ? dose * 1000 : dose;
-    const displayValue = parseFloat(val.toFixed(1));
+  // 1. Respeita a unidade explícita se informada
+  if (protocolUnit === 'mg') {
+    const val = parseFloat(dose.toFixed(2));
     return {
-      displayValue,
-      displayUnit: 'mcg',
-      fullText: `${displayValue} mcg`,
+      displayValue: val,
+      displayUnit: 'mg',
+      fullText: `${val} mg`,
     };
   }
 
-  const displayValue = parseFloat(dose.toFixed(2));
-  const displayUnit = unit || 'mg';
+  if (protocolUnit === 'mcg') {
+    // 1000mcg em diante entende e exibe como mg (ex: 1000 mcg = 1 mg)
+    if (dose >= 1000) {
+      const inMg = parseFloat((dose / 1000).toFixed(2));
+      return {
+        displayValue: inMg,
+        displayUnit: 'mg',
+        fullText: `${inMg} mg`,
+      };
+    }
+    const val = parseFloat(dose.toFixed(1));
+    return {
+      displayValue: val,
+      displayUnit: 'mcg',
+      fullText: `${val} mcg`,
+    };
+  }
+
+  // 2. Regra inteligente automática para valores genéricos:
+  // Se for >= 1000 (ex: 1000mcg): entende como mg
+  if (dose >= 1000) {
+    const inMg = parseFloat((dose / 1000).toFixed(2));
+    return {
+      displayValue: inMg,
+      displayUnit: 'mg',
+      fullText: `${inMg} mg`,
+    };
+  }
+
+  // De 1 em diante: entende como mg (ex: 1 mg, 2.5 mg, 5 mg, 50 mg, 125 mg)
+  if (dose >= 1) {
+    const inMg = parseFloat(dose.toFixed(2));
+    const unit = compoundUnit === 'mcg' && dose < 10 ? 'mg' : (compoundUnit || 'mg');
+    return {
+      displayValue: inMg,
+      displayUnit: unit,
+      fullText: `${inMg} ${unit}`,
+    };
+  }
+
+  // Frações menores que 1 (ex: 0.1 mg, 0.25 mg): exibe em mcg
+  const inMcg = parseFloat((dose * 1000).toFixed(1));
   return {
-    displayValue,
-    displayUnit,
-    fullText: `${displayValue} ${displayUnit}`,
+    displayValue: inMcg,
+    displayUnit: 'mcg',
+    fullText: `${inMcg} mcg`,
   };
 }
 
 /**
- * Retorna a dose formatada com a via de aplicação: "100 mcg (SubQ)" ou "125 mg (IM)".
+ * Retorna a dose formatada com a via de aplicação: "100 mcg (SubQ)" ou "2.5 mg (SubQ)".
  */
 export function formatProtocolDoseWithRoute(p: Protocol, comp?: Compound): string {
-  const formatted = formatCompoundDose(p.dose, comp?.unit);
+  const formatted = formatCompoundDose(p.dose, comp?.unit, p.unit);
   return `${formatted.fullText} (${p.route})`;
 }
 
 /**
  * Calcula o total semanal equivalente de um protocolo.
- * Caso a unidade seja mcg, converte o total em mg para mcg (ex: 0.1 mg * 7 = 0.7 mg -> 700 mcg/semana).
+ * Se o total semanal for de 1 em diante, exibe em mg (ex: 2.5 mg/semana, 17.5 mg/semana).
+ * Se o total semanal for menor que 1 mg (ex: 0.1 mg * 7 = 0.7 mg), exibe em mcg (700 mcg/semana).
  */
 export function getWeeklyTotalDose(p: Protocol, comp?: Compound): string {
   let multiplier = 1;
@@ -56,13 +105,22 @@ export function getWeeklyTotalDose(p: Protocol, comp?: Compound): string {
     case 'every_x_days': multiplier = p.intervalDays ? 7 / p.intervalDays : 2; break;
   }
 
-  const isMcg = comp?.unit === 'mcg';
-  if (isMcg) {
-    const weeklyMg = p.dose * multiplier;
-    const weeklyVal = weeklyMg <= 100 ? weeklyMg * 1000 : weeklyMg;
-    return `${parseFloat(weeklyVal.toFixed(1))} mcg/semana`;
+  // Normalizar a dose por aplicação em mg
+  let doseInMg = p.dose;
+  if (p.unit === 'mcg') {
+    doseInMg = p.dose / 1000;
+  } else if (p.dose >= 1000) {
+    doseInMg = p.dose / 1000;
   }
 
-  const total = (p.dose * multiplier).toFixed(1);
-  return `${total} ${comp?.unit || 'mg'}/semana`;
+  const weeklyMg = doseInMg * multiplier;
+
+  // De 1 em diante, exibe em mg
+  if (weeklyMg >= 1) {
+    return `${parseFloat(weeklyMg.toFixed(2))} mg/semana`;
+  }
+
+  // Frações menores que 1 mg: exibe em mcg
+  const weeklyMcg = parseFloat((weeklyMg * 1000).toFixed(1));
+  return `${weeklyMcg} mcg/semana`;
 }

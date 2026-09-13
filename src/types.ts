@@ -78,6 +78,7 @@ export interface Protocol {
   name: string;
   compoundId: string;
   dose: number;
+  unit?: 'mg' | 'mcg';
   route: 'IM' | 'SubQ' | 'Oral';
   frequency: ProtocolFrequency;
   intervalDays?: number;

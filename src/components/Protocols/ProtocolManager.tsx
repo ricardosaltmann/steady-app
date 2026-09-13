@@ -35,6 +35,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
   const [name, setName] = useState('');
   const [compoundId, setCompoundId] = useState(firstEnabledComp?.id || '');
   const [dose, setDose] = useState('50');
+  const [doseUnit, setDoseUnit] = useState<'mg' | 'mcg'>('mg');
   const [route, setRoute] = useState<'IM' | 'SubQ' | 'Oral'>('IM');
   const [frequency, setFrequency] = useState<ProtocolFrequency>('every_3_5_days');
   const [intervalDays, setIntervalDays] = useState('3.5');
@@ -53,12 +54,34 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     const comp = compounds.find(c => c.id === newCompId);
     if (comp?.category === 'peptide') {
       setRoute('SubQ');
-      if (dose === '50') setDose('2.5');
       setVialMg(String(comp.vialMg || 20));
       setWaterMl(String(comp.waterMl || 2.6));
+      if (comp.unit === 'mcg') {
+        setDoseUnit('mcg');
+        setDose('100');
+      } else {
+        setDoseUnit('mg');
+        setDose('2.5');
+      }
     } else {
-      if (dose === '2.5') setDose('50');
+      setDoseUnit('mg');
+      if (dose === '2.5' || dose === '100') setDose('50');
     }
+  };
+
+  const handleUnitToggle = (newUnit: 'mg' | 'mcg') => {
+    if (newUnit === doseUnit) return;
+    const val = parseFloat(dose);
+    if (!isNaN(val) && val > 0) {
+      if (newUnit === 'mcg') {
+        // Converte mg -> mcg (ex: 0.1 mg -> 100 mcg; 2.5 mg -> 2500 mcg)
+        setDose(String(parseFloat((val * 1000).toFixed(1))));
+      } else {
+        // Converte mcg -> mg (ex: 100 mcg -> 0.1 mg; 1000 mcg -> 1 mg)
+        setDose(String(parseFloat((val / 1000).toFixed(3))));
+      }
+    }
+    setDoseUnit(newUnit);
   };
 
   const openNewModal = () => {
@@ -67,12 +90,20 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     const firstComp = compsToUse[0] || compounds[0];
     const firstCompId = firstComp?.id || '';
     setCompoundId(firstCompId);
-    if (firstComp?.category === 'peptide') {
+    if (firstComp?.unit === 'mcg') {
+      setDoseUnit('mcg');
+      setDose('100');
+      setRoute('SubQ');
+      setVialMg(String(firstComp.vialMg || 20));
+      setWaterMl(String(firstComp.waterMl || 2.6));
+    } else if (firstComp?.category === 'peptide') {
+      setDoseUnit('mg');
       setDose('2.5');
       setRoute('SubQ');
       setVialMg(String(firstComp.vialMg || 20));
       setWaterMl(String(firstComp.waterMl || 2.6));
     } else {
+      setDoseUnit('mg');
       setDose('50');
       setRoute('IM');
       setVialMg('20');
@@ -89,7 +120,28 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     setEditingProtocol(p);
     setName(p.name);
     setCompoundId(p.compoundId);
-    setDose(String(p.dose));
+
+    // Identificar a unidade correta
+    let initialUnit: 'mg' | 'mcg' = 'mg';
+    let initialDose = String(p.dose);
+
+    if (p.unit) {
+      initialUnit = p.unit;
+    } else {
+      // Se não tinha unidade gravada:
+      // Se a dose for de 1 em diante (ex: 1, 2.5, 5, 50), entende como mg
+      if (p.dose >= 1) {
+        initialUnit = 'mg';
+        initialDose = String(p.dose);
+      } else {
+        // Fração em mg (ex: 0.1 mg) representa 100 mcg
+        initialUnit = 'mcg';
+        initialDose = String(parseFloat((p.dose * 1000).toFixed(1)));
+      }
+    }
+
+    setDoseUnit(initialUnit);
+    setDose(initialDose);
     setRoute(p.route);
     setFrequency(p.frequency);
     setIntervalDays(String(p.intervalDays || 3.5));
@@ -105,6 +157,9 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     const parsedDose = parseFloat(dose);
     if (isNaN(parsedDose) || parsedDose <= 0) return;
 
+    // Normalização para mg no cálculo volumétrico da seringa
+    const doseInMg = doseUnit === 'mcg' ? parsedDose / 1000 : parsedDose;
+
     const numVialMg = parseFloat(vialMg) || undefined;
     const numWaterMl = parseFloat(waterMl) || undefined;
     let concentrationMgMl: number | undefined = undefined;
@@ -112,7 +167,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
     if (numVialMg && numWaterMl && numWaterMl > 0) {
       concentrationMgMl = Number((numVialMg / numWaterMl).toFixed(2));
-      syringeUnits = Number(((parsedDose / concentrationMgMl) * 100).toFixed(1));
+      syringeUnits = Number(((doseInMg / concentrationMgMl) * 100).toFixed(1));
     }
 
     const protocolToSave: Protocol = {
@@ -120,6 +175,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
       name: name.trim() || 'Protocolo Sem Nome',
       compoundId,
       dose: parsedDose,
+      unit: doseUnit,
       route,
       frequency,
       intervalDays: frequency === 'every_x_days' ? parseFloat(intervalDays) || 3 : undefined,
@@ -153,6 +209,9 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
   const compoundMap = new Map(compounds.map(c => [c.id, c]));
 
+  // Dose normalizada para cálculo da seringa em tempo real no formulário
+  const currentDoseInMg = doseUnit === 'mcg' ? (parseFloat(dose) || 0) / 1000 : (parseFloat(dose) || 0);
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -169,7 +228,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
         <button
           onClick={openNewModal}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs shadow-md transition-all active:scale-95"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs shadow-md transition-all active:scale-95 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Novo Protocolo</span>
@@ -195,6 +254,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {protocols.map(p => {
             const comp = compoundMap.get(p.compoundId);
+            const normDoseInMg = p.unit === 'mcg' ? p.dose / 1000 : (p.dose >= 1000 ? p.dose / 1000 : p.dose);
             return (
               <div
                 key={p.id}
@@ -219,7 +279,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
                     <button
                       onClick={() => onToggleActive(p.id)}
-                      className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                      className={`text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
                         p.active
                           ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/60'
                           : 'bg-slate-800 text-slate-400 border-slate-700'
@@ -236,7 +296,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                         Dose por Aplicação
                       </span>
                       <div className="font-extrabold text-sm text-blue-400">
-                        {formatCompoundDose(p.dose, comp?.unit).fullText} ({p.route})
+                        {formatCompoundDose(p.dose, comp?.unit, p.unit).fullText} ({p.route})
                       </div>
                     </div>
 
@@ -263,7 +323,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                       </span>
                       <span className="font-bold text-emerald-400 flex items-center gap-1">
                         <Syringe className="w-3.5 h-3.5" />
-                        {p.syringeUnits || ((p.dose / (p.vialMg / p.waterMl)) * 100).toFixed(1)} UI
+                        {p.syringeUnits || ((normDoseInMg / (p.vialMg / p.waterMl)) * 100).toFixed(1)} UI
                       </span>
                     </div>
                   )}
@@ -278,30 +338,34 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                 {/* Bottom Actions */}
                 <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
                   <button
-                    onClick={() => onQuickLogFromProtocol(p)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs shadow-md transition-all active:scale-95"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Aplicar Esta Dose</span>
-                  </button>
-
-                  <button
                     onClick={() => openEditModal(p)}
-                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Editar</span>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      if (confirm(`Excluir o protocolo "${p.name}"?`)) {
-                        onDeleteProtocol(p.id);
-                      }
-                    }}
-                    className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-xl transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onQuickLogFromProtocol(p)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Syringe className="w-3.5 h-3.5" />
+                      <span>Tomar Dose</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (confirm(`Excluir o protocolo "${p.name}"?`)) {
+                          onDeleteProtocol(p.id);
+                        }
+                      }}
+                      className="p-1.5 rounded-xl hover:bg-rose-950/40 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -309,24 +373,24 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
         </div>
       )}
 
-      {/* Create / Edit Protocol Modal */}
+      {/* New / Edit Protocol Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
-            <div className="p-4 sm:p-5 border-b border-slate-800 shrink-0 flex items-center justify-between">
-              <h3 className="text-base font-bold text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-400" />
                 {editingProtocol ? 'Editar Protocolo' : 'Novo Protocolo Recorrente'}
               </h3>
               <button
-                type="button"
-                onClick={() => { setIsModalOpen(false); setEditingProtocol(null); }}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">
+            <form onSubmit={handleSave} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-300">Nome do Protocolo</label>
                 <input
@@ -344,7 +408,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                 <select
                   value={compoundId}
                   onChange={e => handleCompoundChange(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none cursor-pointer"
                 >
                   {steroidComps.length > 0 && (
                     <optgroup label="💉 ESTEROIDES & TRT">
@@ -417,7 +481,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                             key={val}
                             type="button"
                             onClick={() => setVialMg(val)}
-                            className={`flex-1 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                            className={`flex-1 py-0.5 rounded text-[9px] font-bold border transition-colors cursor-pointer ${
                               vialMg === val
                                 ? 'bg-emerald-600 border-emerald-500 text-white'
                                 : 'bg-slate-900 border-slate-800 text-slate-400'
@@ -449,7 +513,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                             key={val}
                             type="button"
                             onClick={() => setWaterMl(val)}
-                            className={`flex-1 py-0.5 rounded text-[9px] font-bold border transition-colors ${
+                            className={`flex-1 py-0.5 rounded text-[9px] font-bold border transition-colors cursor-pointer ${
                               waterMl === val
                                 ? 'bg-cyan-600 border-cyan-500 text-white'
                                 : 'bg-slate-900 border-slate-800 text-slate-400'
@@ -462,7 +526,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Concentração e UI calculadas */}
+                  {/* Concentração e UI calculadas usando a dose em mg */}
                   {parseFloat(vialMg) > 0 && parseFloat(waterMl) > 0 && (
                     <div className="p-2.5 rounded-xl bg-slate-900/90 border border-emerald-900/40 flex items-center justify-between text-xs">
                       <div>
@@ -474,7 +538,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                       <div className="text-right">
                         <span className="text-[10px] text-slate-400 block">Seringa (U-100):</span>
                         <strong className="text-emerald-400 text-sm">
-                          {((parseFloat(dose) / (parseFloat(vialMg) / parseFloat(waterMl))) * 100).toFixed(1)} UI
+                          {((currentDoseInMg / (parseFloat(vialMg) / parseFloat(waterMl))) * 100).toFixed(1)} UI
                         </strong>
                       </div>
                     </div>
@@ -483,23 +547,72 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
               )}
 
               <div className="grid grid-cols-2 gap-3">
+                {/* Dose por Aplicação com Seletor de Unidade [ mcg | mg ] */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                    <span>Dose por Aplicação</span>
-                    {selectedComp?.unit === 'mcg' && (
-                      <span className="text-amber-400 font-medium text-[10px]">
-                        {parseFloat(dose) > 0 ? `= ${(parseFloat(dose) * 1000).toFixed(0)} mcg` : 'em mg (ex: 0.1 mg = 100 mcg)'}
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={dose}
-                    onChange={e => setDose(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-semibold focus:outline-none focus:border-purple-500"
-                    required
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-300">Dose por Aplicação</label>
+                    <div className="inline-flex items-center bg-slate-900 border border-slate-700/80 p-0.5 rounded-lg">
+                      <button
+                        type="button"
+                        onClick={() => handleUnitToggle('mcg')}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                          doseUnit === 'mcg'
+                            ? 'bg-purple-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        mcg
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUnitToggle('mg')}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                          doseUnit === 'mg'
+                            ? 'bg-purple-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        mg
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="any"
+                      value={dose}
+                      onChange={e => setDose(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-semibold focus:outline-none focus:border-purple-500 pr-12"
+                      required
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                      {doseUnit}
+                    </span>
+                  </div>
+
+                  {/* Dica de Equivalência Inteligente */}
+                  {dose && parseFloat(dose) > 0 && (
+                    <div className="text-[10px] text-slate-400 pt-0.5">
+                      {doseUnit === 'mcg' ? (
+                        parseFloat(dose) >= 1000 ? (
+                          <span className="text-purple-300 font-semibold">
+                            = {parseFloat((parseFloat(dose) / 1000).toFixed(2))} mg
+                          </span>
+                        ) : (
+                          <span>= {parseFloat((parseFloat(dose) / 1000).toFixed(3))} mg</span>
+                        )
+                      ) : (
+                        parseFloat(dose) < 1 ? (
+                          <span className="text-purple-300 font-semibold">
+                            = {parseFloat((parseFloat(dose) * 1000).toFixed(0))} mcg
+                          </span>
+                        ) : (
+                          <span>= {parseFloat((parseFloat(dose) * 1000).toFixed(0))} mcg</span>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -507,7 +620,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                   <select
                     value={route}
                     onChange={e => setRoute(e.target.value as 'IM' | 'SubQ' | 'Oral')}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none cursor-pointer"
                   >
                     <option value="IM">Intramuscular (IM)</option>
                     <option value="SubQ">Subcutânea (SubQ)</option>
@@ -521,7 +634,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                 <select
                   value={frequency}
                   onChange={e => setFrequency(e.target.value as ProtocolFrequency)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none cursor-pointer"
                 >
                   <option value="every_3_5_days">2x por semana (Ex: Seg/Qui ou Ter/Sex)</option>
                   <option value="weekly">1x por semana (Semanal)</option>
@@ -551,7 +664,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                   type="date"
                   value={startDate}
                   onChange={e => setStartDate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none cursor-pointer"
                   required
                 />
               </div>
@@ -571,13 +684,13 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs text-slate-400 hover:text-white"
+                  className="px-4 py-2 text-xs text-slate-400 hover:text-white cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs shadow-md"
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs shadow-md cursor-pointer transition-all active:scale-95"
                 >
                   Salvar Protocolo
                 </button>
