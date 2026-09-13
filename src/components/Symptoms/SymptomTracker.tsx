@@ -295,11 +295,12 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   };
 
-  // Sync Now with connected Google Account
+  // Sync Now with connected Google Account / Health Connect
   const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
+      console.log('[Health Connect] Iniciando solicitação de permissões e leitura de métricas...');
       const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight);
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
@@ -310,7 +311,11 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       setGoogleConfig(storage.getGoogleHealthConfig());
       setHasOAuthToken(res.hasOAuthToken || isGoogleUser);
     } catch (err: any) {
-      setSyncFeedback({ type: 'error', message: 'Erro ao sincronizar: ' + err.message });
+      console.error('[Health Connect Error] Erro ao sincronizar Health Connect:', err);
+      setSyncFeedback({ 
+        type: 'error', 
+        message: `Falha ao buscar no Health Connect: ${err?.message || 'Erro inesperado'}. Verifique as permissões de saúde nas configurações do Android.` 
+      });
     } finally {
       setIsSyncing(false);
     }

@@ -54,13 +54,14 @@ export const googleFitSync = {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          scopes: 'https://www.googleapis.com/auth/fitness.body.read email profile',
+          scopes: 'https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly',
           redirectTo,
         },
       });
       if (error) throw error;
       return { success: true };
     } catch (err: any) {
+      console.error('Erro no signInWithOAuth:', err);
       return { success: false, error: err.message || 'Erro ao abrir autorização do Google.' };
     }
   },
@@ -101,7 +102,7 @@ export const googleFitSync = {
     return updated;
   },
 
-  // Perform Cloud Sync with Google Fit REST API
+  // Perform Cloud Sync with Google Fit REST API or Android Health Connect
   syncData: async (
     existingSymptoms: SymptomLog[],
     _currentWeightKg: number = 82.0,
@@ -124,8 +125,8 @@ export const googleFitSync = {
         isGoogleSession = session?.user?.app_metadata?.provider === 'google' ||
                           session?.user?.identities?.some((id: any) => id.provider === 'google') ||
                           !!session?.provider_token;
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error('Erro ao verificar sessão Supabase:', err);
       }
     }
 
@@ -145,7 +146,78 @@ export const googleFitSync = {
     const newLogs: SymptomLog[] = [];
     let hasToken = false;
 
-    // Check Google OAuth token in Supabase session
+    // 1. Tentar leitura nativa do Android Health Connect em tempo de execução
+    if (Capacitor.isNativePlatform()) {
+      try {
+        console.log('[Health Connect] Verificando runtime nativo do Health Connect...');
+        const plugins = (window as any).Capacitor?.Plugins;
+        const HealthConnect = plugins?.HealthConnect || plugins?.CapacitorHealthConnect;
+
+        if (HealthConnect) {
+          console.log('[Health Connect] Solicitando permissões em tempo de execução...');
+          if (typeof HealthConnect.requestHealthPermissions === 'function') {
+            await HealthConnect.requestHealthPermissions({
+              read: ['Weight', 'Height', 'BodyFat']
+            });
+          } else if (typeof HealthConnect.requestPermissions === 'function') {
+            await HealthConnect.requestPermissions({
+              permissions: [
+                'android.permission.health.READ_WEIGHT',
+                'android.permission.health.READ_HEIGHT',
+                'android.permission.health.READ_BODY_FAT'
+              ]
+            });
+          }
+
+          console.log('[Health Connect] Lendo registros de peso e composição corporal...');
+          const startTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+          const endTime = new Date().toISOString();
+
+          let nativeRecords: any[] = [];
+          if (typeof HealthConnect.readRecords === 'function') {
+            const res = await HealthConnect.readRecords({
+              type: 'Weight',
+              timeRangeFilter: { type: 'between', startTime, endTime }
+            });
+            nativeRecords = res?.records || [];
+          } else if (typeof HealthConnect.getRecords === 'function') {
+            const res = await HealthConnect.getRecords({
+              recordType: 'Weight',
+              startDate: startTime,
+              endDate: endTime
+            });
+            nativeRecords = res?.records || [];
+          }
+
+          console.log('[Health Connect] Registros obtidos nativamente:', nativeRecords.length);
+          nativeRecords.forEach((rec: any) => {
+            const w = rec?.weight?.inKilograms ?? rec?.weightKg ?? rec?.value;
+            const dateStr = rec?.time ? rec.time.slice(0, 10) : rec?.startTime?.slice(0, 10);
+            if (w && dateStr && !existingDates.has(dateStr)) {
+              newLogs.push({
+                id: 'symp_hc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+                date: dateStr,
+                weightKg: parseFloat(Number(w).toFixed(1)),
+                heightCm,
+                energy: 4,
+                libido: 4,
+                mood: 4,
+                sleep: 4,
+                acne: 1,
+                waterRetention: 1,
+                notes: 'Sincronizado via Health Connect Android',
+                updatedAt: new Date().toISOString(),
+              });
+              existingDates.add(dateStr);
+            }
+          });
+        }
+      } catch (hcErr) {
+        console.error('[Health Connect Error] Erro ao consultar permissões/dados nativos do Health Connect:', hcErr);
+      }
+    }
+
+    // 2. Consultar Google Fitness / Health Cloud API com Token OAuth
     if (isSupabaseConfigured()) {
       try {
         const session = (await supabase.auth.getSession()).data.session;
@@ -156,6 +228,7 @@ export const googleFitSync = {
           const startTimeMillis = Date.now() - 60 * 24 * 60 * 60 * 1000; // 60 dias
           const endTimeMillis = Date.now();
 
+          console.log('[Google Fit API] Consultando métricas com escopo fitness.body.read...');
           // Fetch Weight and Body Fat
           const response = await fetch('https://fitness.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
             method: 'POST',
@@ -199,7 +272,7 @@ export const googleFitSync = {
                       sleep: 4,
                       acne: 1,
                       waterRetention: 1,
-                      notes: 'Sincronizado via Google Fit API',
+                      notes: 'Sincronizado via Google Fit / Health API',
                       updatedAt: new Date().toISOString(),
                     });
                     existingDates.add(dateStr);
@@ -207,12 +280,15 @@ export const googleFitSync = {
                 }
               });
             }
+          } else {
+            const errDetails = await response.text();
+            console.error('[Google Fit API Error] Falha na requisição:', response.status, errDetails);
           }
         } else if (isGoogleSession) {
           hasToken = true;
         }
       } catch (err) {
-        console.warn('Google Fit API query error:', err);
+        console.error('[Google Fit API Error] Erro ao consultar API:', err);
       }
     }
 
@@ -239,9 +315,9 @@ export const googleFitSync = {
       newLogs,
       count: newLogs.length,
       message: newLogs.length > 0
-        ? `Sincronização concluída! ${newLogs.length} medições importadas do Google Fit.`
+        ? `Sincronização concluída! ${newLogs.length} medições importadas com sucesso.`
         : (isGoogleSession
-            ? 'Conta Google conectada. Utilize a importação direta do Health Connect ou arquivos Fitbit para sincronizar novas pesagens.'
+            ? 'Conta Google conectada. Nenhuma nova pesagem encontrada nos últimos 60 dias no Google Fit / Health Connect. Você também pode importar arquivos CSV do Fitbit.'
             : 'Nenhuma nova pesagem encontrada na API Google Fit para os últimos 60 dias.'),
       lastSyncAt: updatedSyncTime,
       hasOAuthToken: true,
