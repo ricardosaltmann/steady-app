@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { UserAccount } from '../../types';
 import { Settings, Plus, Droplets, Bell, Shield, Activity, LogOut, User } from 'lucide-react';
 
@@ -26,7 +26,12 @@ export const Header: React.FC<HeaderProps> = ({
   hasDueReminders = false,
 }) => {
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 sm:px-6 py-2.5 shadow-lg">
+    <header 
+      className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-3 sm:px-6 pb-2.5 shadow-lg transition-all"
+      style={{
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.625rem)'
+      }}
+    >
       <div className="max-w-5xl mx-auto flex items-center justify-between gap-2.5">
         {/* Brand Logo */}
         <div className="flex items-center gap-2.5">

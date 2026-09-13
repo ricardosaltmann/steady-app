@@ -111,74 +111,110 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // 1. Check if there is an active protocol for this compound
-    const targetProto = (selectedProtocol && selectedProtocol.compoundId === selectedCompoundId)
-      ? selectedProtocol
-      : protocols?.find(p => p.compoundId === selectedCompoundId && p.active);
-
-    if (targetProto) {
-      setProtocolId(targetProto.id);
-      const protoDose = String(targetProto.dose);
+  const applyProtocolOrDefaults = (comp: Compound, proto?: Protocol | null) => {
+    if (proto) {
+      setProtocolId(proto.id);
+      const protoDose = String(proto.dose);
       setDose(protoDose);
-      const targetRoute = (targetProto.route as 'IM' | 'SubQ') || (currentCompound?.category === 'peptide' ? 'SubQ' : 'IM');
+      const targetRoute = (proto.route as 'IM' | 'SubQ') || (comp?.category === 'peptide' ? 'SubQ' : 'IM');
       setRoute(targetRoute);
       if (targetRoute === 'SubQ') {
         setSite('abdomen_center');
         setNeedleInfo('31G 5/16"');
+      } else {
+        setSite(lastUsedSite || 'deltoid_right');
+        setNeedleInfo('30G 1/2"');
       }
 
-      if (currentCompound?.category === 'peptide') {
-        const pVial = targetProto.vialMg || currentCompound.vialMg || 20;
-        const pWater = targetProto.waterMl || currentCompound.waterMl || 2.6;
+      if (comp?.category === 'peptide') {
+        const pVial = proto.vialMg || comp.vialMg || 20;
+        const pWater = proto.waterMl || comp.waterMl || 2.6;
         setVialMg(String(pVial));
         setWaterMl(String(pWater));
-        const calcConc = (pVial / pWater).toFixed(2);
+        const calcConc = proto.concentrationMgMl ? String(proto.concentrationMgMl) : (pVial / pWater).toFixed(2);
         setConcentration(calcConc);
         updateCalculationsFromDoseAndConc(protoDose, calcConc);
       } else {
-        const protoConc = targetProto.concentrationMgMl 
-          ? String(targetProto.concentrationMgMl)
-          : (currentCompound?.defaultConcentrationMgMl ? String(currentCompound.defaultConcentrationMgMl) : '200');
+        const protoConc = proto.concentrationMgMl 
+          ? String(proto.concentrationMgMl)
+          : (comp?.defaultConcentrationMgMl ? String(comp.defaultConcentrationMgMl) : '200');
         setConcentration(protoConc);
         updateCalculationsFromDoseAndConc(protoDose, protoConc);
+      }
+      if (proto.notes) {
+        setNotes(proto.notes);
+      }
+    } else {
+      setProtocolId(undefined);
+      if (comp) {
+        if (comp.category === 'peptide') {
+          const pVial = comp.vialMg || 20;
+          const pWater = comp.waterMl || 2.6;
+          setVialMg(String(pVial));
+          setWaterMl(String(pWater));
+          const calcConc = (pVial / pWater).toFixed(2);
+          setConcentration(calcConc);
+          const defaultPeptideDose = '2.5';
+          setRoute('SubQ');
+          setSite('abdomen_center');
+          setNeedleInfo('31G 5/16"');
+          updateCalculationsFromDoseAndConc(defaultPeptideDose, calcConc);
+        } else if (comp.category === 'fertility') {
+          const defaultFertDose = '250';
+          const defaultConc = comp.defaultConcentrationMgMl ? String(comp.defaultConcentrationMgMl) : '100';
+          setConcentration(defaultConc);
+          setRoute('SubQ');
+          setNeedleInfo('30G 1/2"');
+          updateCalculationsFromDoseAndConc(defaultFertDose, defaultConc);
+        } else {
+          const defaultSteroidDose = '50';
+          const defaultConc = comp.defaultConcentrationMgMl ? String(comp.defaultConcentrationMgMl) : '200';
+          setConcentration(defaultConc);
+          setRoute('IM');
+          setNeedleInfo('30G 1/2"');
+          updateCalculationsFromDoseAndConc(defaultSteroidDose, defaultConc);
+        }
+      }
+    }
+  };
+
+  const handleCompoundChange = (newCompoundId: string) => {
+    setSelectedCompoundId(newCompoundId);
+    const comp = compsToUse.find(c => c.id === newCompoundId) || compounds.find(c => c.id === newCompoundId);
+    const activeProto = protocols?.find(p => p.compoundId === newCompoundId && p.active);
+    if (comp) {
+      applyProtocolOrDefaults(comp, activeProto);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Reset date and time to current
+    setDate(new Date().toISOString().slice(0, 10));
+    setTime(new Date().toTimeString().slice(0, 5));
+
+    // If a specific protocol was passed (e.g. from clicking "Tomar Dose")
+    if (selectedProtocol) {
+      setSelectedCompoundId(selectedProtocol.compoundId);
+      const protoComp = compsToUse.find(c => c.id === selectedProtocol.compoundId) || compounds.find(c => c.id === selectedProtocol.compoundId);
+      if (protoComp) {
+        applyProtocolOrDefaults(protoComp, selectedProtocol);
       }
       return;
     }
 
-    setProtocolId(undefined);
-    if (currentCompound) {
-      if (currentCompound.category === 'peptide') {
-        const pVial = currentCompound.vialMg || 20;
-        const pWater = currentCompound.waterMl || 2.6;
-        setVialMg(String(pVial));
-        setWaterMl(String(pWater));
-        const calcConc = (pVial / pWater).toFixed(2);
-        setConcentration(calcConc);
-        const defaultPeptideDose = '2.5';
-        setRoute('SubQ');
-        setSite('abdomen_center');
-        setNeedleInfo('31G 5/16"');
-        updateCalculationsFromDoseAndConc(defaultPeptideDose, calcConc);
-      } else if (currentCompound.category === 'fertility') {
-        const defaultFertDose = '250';
-        const defaultConc = currentCompound.defaultConcentrationMgMl ? String(currentCompound.defaultConcentrationMgMl) : '100';
-        setConcentration(defaultConc);
-        setRoute('SubQ');
-        setNeedleInfo('30G 1/2"');
-        updateCalculationsFromDoseAndConc(defaultFertDose, defaultConc);
-      } else {
-        const defaultSteroidDose = '50';
-        const defaultConc = currentCompound.defaultConcentrationMgMl ? String(currentCompound.defaultConcentrationMgMl) : '200';
-        setConcentration(defaultConc);
-        setRoute('IM');
-        setNeedleInfo('30G 1/2"');
-        updateCalculationsFromDoseAndConc(defaultSteroidDose, defaultConc);
+    // Otherwise use default or currently selected compound
+    const targetCompId = defaultCompoundId || selectedCompoundId || compsToUse[0]?.id;
+    if (targetCompId) {
+      setSelectedCompoundId(targetCompId);
+      const comp = compsToUse.find(c => c.id === targetCompId) || compounds.find(c => c.id === targetCompId);
+      const activeProto = protocols?.find(p => p.compoundId === targetCompId && p.active);
+      if (comp) {
+        applyProtocolOrDefaults(comp, activeProto);
       }
     }
-  }, [isOpen, selectedCompoundId, currentCompound, selectedProtocol, protocols]);
+  }, [isOpen, selectedProtocol, defaultCompoundId]);
 
   if (!isOpen) return null;
 
@@ -213,6 +249,8 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
     onClose();
   };
 
+  const activeProtocolInfo = selectedProtocol || protocols?.find(p => p.id === protocolId || (p.compoundId === selectedCompoundId && p.active));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
@@ -240,6 +278,24 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">
+          {/* Active Protocol Banner */}
+          {activeProtocolInfo && (
+            <div className="flex items-center gap-2.5 p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl text-emerald-400 text-xs">
+              <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-white truncate">
+                  Dose vinculada ao protocolo: <span className="text-emerald-400">{activeProtocolInfo.name}</span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {activeProtocolInfo.dose} {currentCompound.unit || 'mg'} • Via {activeProtocolInfo.route}
+                  {activeProtocolInfo.frequency ? ` • ${activeProtocolInfo.frequency}` : ''}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Compound Selection */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">
@@ -247,7 +303,7 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
             </label>
             <select
               value={selectedCompoundId}
-              onChange={e => setSelectedCompoundId(e.target.value)}
+              onChange={e => handleCompoundChange(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500 font-medium"
             >
               {steroidComps.length > 0 && (

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 @layer base {
   :root {
@@ -10,6 +10,8 @@
     --color-purple: #a855f7;
     --color-rose: #f43f5e;
     --color-amber: #f59e0b;
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
   }
 
   html {
@@ -55,7 +57,21 @@
   box-shadow: 0 0 25px -5px rgba(168, 85, 247, 0.3);
 }
 
-/* Mobile Safe Area Inset Support */
+/* Mobile Safe Area Inset Support (Android Status Bar & iOS Notch) */
+.safe-area-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 0px);
+}
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+.safe-area-header {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.625rem);
+}
+
 .safe-area-bottom {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
 }
@@ -65,4 +81,3 @@
     padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
   }
 }
-
