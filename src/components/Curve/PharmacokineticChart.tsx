@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -67,15 +67,16 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Strict time window respecting the selected filter (total span equals filter)
   const rangeConfig = useMemo(() => {
     switch (timeRange) {
       case '14d':
-        return { daysPast: 10, daysFuture: 7, stepHours: 4 };
+        return { daysPast: 10, daysFuture: 4, stepHours: 4 }; // 14 days total
       case '60d':
-        return { daysPast: 40, daysFuture: 20, stepHours: 8 };
+        return { daysPast: 42, daysFuture: 18, stepHours: 8 }; // 60 days total
       case '30d':
       default:
-        return { daysPast: 21, daysFuture: 14, stepHours: 6 };
+        return { daysPast: 21, daysFuture: 9, stepHours: 6 }; // 30 days total
     }
   }, [timeRange]);
 
@@ -179,9 +180,11 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
       seriesConfigs.forEach(item => {
         const itemPoint = item.points[i];
         if (itemPoint) {
-          pt[`level_${item.id}`] = itemPoint.isFuture ? itemPoint.projectedLevel : itemPoint.actualLevel;
+          // Both actual (solid) and projected (dashed) keys
           pt[`actual_${item.id}`] = itemPoint.actualLevel;
           pt[`projected_${item.id}`] = itemPoint.projectedLevel;
+          pt[`level_${item.id}`] = itemPoint.isFuture ? itemPoint.projectedLevel : itemPoint.actualLevel;
+
           if (itemPoint.injectionPoint && !pt.injectionPoints.some((x: any) => x.compoundName === itemPoint.injectionPoint?.compoundName && x.dose === itemPoint.injectionPoint?.dose)) {
             pt.injectionPoints.push(itemPoint.injectionPoint);
           }
@@ -192,14 +195,8 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
     });
   }, [seriesConfigs, weightMap]);
 
-  // Find index or timestamp closest to "Now"
+  // Timestamp for "Now"
   const nowMs = Date.now();
-  const closestNowPoint = useMemo(() => {
-    if (chartData.length === 0) return null;
-    return chartData.reduce((prev, curr) => 
-      Math.abs(curr.timestamp - nowMs) < Math.abs(prev.timestamp - nowMs) ? curr : prev
-    , chartData[0]);
-  }, [chartData, nowMs]);
 
   // Series toggle handler
   const toggleSeries = (id: string) => {
@@ -229,9 +226,14 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             {data.dateLabel}
           </span>
-          {data.isFuture && (
-            <span className="bg-purple-950/60 text-purple-300 border border-purple-800/50 text-[10px] font-medium px-1.5 py-0.5 rounded-md">
-              Projeção
+          {data.isFuture ? (
+            <span className="bg-purple-950/70 text-purple-300 border border-purple-700/60 text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+              Projeção Estimada
+            </span>
+          ) : (
+            <span className="bg-slate-800/80 text-slate-300 border border-slate-700 text-[10px] font-medium px-1.5 py-0.5 rounded-md">
+              Histórico
             </span>
           )}
         </div>
@@ -249,7 +251,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
           )}
 
           {seriesConfigs.filter(s => selectedSeriesIds.includes(s.id)).map(s => {
-            const val = data[`level_${s.id}`];
+            const val = data.isFuture ? data[`projected_${s.id}`] : data[`actual_${s.id}`];
             if (val === undefined || val === null) return null;
             return (
               <div key={s.id} className="flex items-center justify-between">
@@ -405,9 +407,9 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                               <div className="truncate">
                                 <span className="font-semibold block truncate">{s.name}</span>
-                                  <span className="text-[10px] text-slate-400 truncate">
-                                    {s.protocol?.dose ? `${formatCompoundDose(s.protocol.dose, s.unit).fullText}` : s.compoundName} • {s.clinicalUnit}
-                                  </span>
+                                <span className="text-[10px] text-slate-400 truncate">
+                                  {s.protocol?.dose ? `${formatCompoundDose(s.protocol.dose, s.unit).fullText}` : s.compoundName} • {s.clinicalUnit}
+                                </span>
                               </div>
                             </div>
                             <div 
@@ -431,7 +433,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
               )}
             </div>
 
-            {/* Time range switcher */}
+            {/* Strict Time range switcher (14d, 30d, 60d) */}
             <div className="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800">
               {(['14d', '30d', '60d'] as const).map(range => (
                 <button
@@ -508,12 +510,20 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                 ))}
               </defs>
 
+              {/* XAxis strictly using timestamp domain to guarantee precise time window */}
               <XAxis
-                dataKey="dayLabel"
+                dataKey="timestamp"
+                type="number"
+                scale="time"
+                domain={['dataMin', 'dataMax']}
                 stroke="#64748b"
                 tick={{ fontSize: 10, fill: '#64748b' }}
-                interval="preserveStartEnd"
                 tickLine={false}
+                tickFormatter={(ts: number) => {
+                  const d = new Date(ts);
+                  const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                  return `${d.getDate()} ${months[d.getMonth()]}`;
+                }}
               />
 
               {/* Left Y-Axis: Compounds Concentration */}
@@ -542,36 +552,55 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
 
               <Tooltip content={<CustomTooltip />} />
 
-              {/* "Now" vertical line */}
-              {closestNowPoint && (
-                <ReferenceLine
-                  yAxisId="compoundAxis"
-                  x={closestNowPoint.dayLabel}
-                  stroke="#f43f5e"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  label={{
-                    value: 'Hoje',
-                    position: 'insideTopLeft',
-                    fill: '#f43f5e',
-                    fontSize: 10,
-                    fontWeight: 600,
-                  }}
-                />
-              )}
+              {/* "Hoje" Reference Line */}
+              <ReferenceLine
+                yAxisId="compoundAxis"
+                x={nowMs}
+                stroke="#f43f5e"
+                strokeDasharray="3 3"
+                strokeWidth={1.5}
+                label={{
+                  value: 'Hoje',
+                  position: 'insideTopLeft',
+                  fill: '#f43f5e',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              />
 
-              {/* Compound Curves for Selected Active Protocols */}
+              {/* 1. Solid Curve for Past History (Up to Today) */}
               {seriesConfigs.filter(s => selectedSeriesIds.includes(s.id)).map(s => (
                 <Area
-                  key={s.id}
+                  key={`act_${s.id}`}
                   yAxisId="compoundAxis"
                   type="monotone"
-                  dataKey={`level_${s.id}`}
+                  dataKey={`actual_${s.id}`}
                   stroke={s.color}
                   strokeWidth={2.5}
                   fillOpacity={1}
                   fill={`url(#grad_${s.id})`}
-                  name={s.name}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                  name={`${s.name} (Histórico)`}
+                />
+              ))}
+
+              {/* 2. Dashed / Dotted Curve with reduced opacity for Future Projections (Estimates) */}
+              {seriesConfigs.filter(s => selectedSeriesIds.includes(s.id)).map(s => (
+                <Line
+                  key={`proj_${s.id}`}
+                  yAxisId="compoundAxis"
+                  type="monotone"
+                  dataKey={`projected_${s.id}`}
+                  stroke={s.color}
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.75}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                  name={`${s.name} (Projeção Futura)`}
                 />
               ))}
 
@@ -610,9 +639,14 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
             ))}
           </div>
 
-          <span className="text-[10px] text-slate-500">
-            Linha pontilhada vermelha = Momento Atual
-          </span>
+          <div className="flex items-center gap-3 text-[10px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-0.5 bg-cyan-400 inline-block" /> Linha sólida: Histórico
+            </span>
+            <span className="flex items-center gap-1 text-purple-300">
+              <span className="w-3 border-b-2 border-dashed border-purple-400 inline-block" /> Tracejada: Projeção futura
+            </span>
+          </div>
         </div>
       </div>
     </div>

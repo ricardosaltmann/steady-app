@@ -1,4 +1,4 @@
-import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings } from '../types';
+import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { auth } from './auth';
 
@@ -363,12 +363,17 @@ export const storage = {
 
   saveInjections: (injections: Injection[], userId?: string) => {
     const key = getScopedKey('injections', userId);
-    localStorage.setItem(key, JSON.stringify(injections));
+    const withTs = (injections || []).map(i => ({
+      ...i,
+      updatedAt: i.updatedAt || new Date().toISOString(),
+    }));
+    localStorage.setItem(key, JSON.stringify(withTs));
   },
 
   addInjection: (injection: Injection, userId?: string) => {
     const list = storage.getInjections(userId);
-    list.unshift(injection);
+    const injWithTs = { ...injection, updatedAt: injection.updatedAt || new Date().toISOString() };
+    list.unshift(injWithTs);
     storage.saveInjections(list, userId);
     return list;
   },
@@ -400,7 +405,11 @@ export const storage = {
 
   saveProtocols: (protocols: Protocol[], userId?: string) => {
     const key = getScopedKey('protocols', userId);
-    localStorage.setItem(key, JSON.stringify(protocols));
+    const withTs = (protocols || []).map(p => ({
+      ...p,
+      updatedAt: p.updatedAt || new Date().toISOString(),
+    }));
+    localStorage.setItem(key, JSON.stringify(withTs));
   },
 
   getLabs: (userId?: string): LabResult[] => {
@@ -424,7 +433,11 @@ export const storage = {
 
   saveLabs: (labs: LabResult[], userId?: string) => {
     const key = getScopedKey('labs', userId);
-    localStorage.setItem(key, JSON.stringify(labs));
+    const withTs = (labs || []).map(l => ({
+      ...l,
+      updatedAt: l.updatedAt || new Date().toISOString(),
+    }));
+    localStorage.setItem(key, JSON.stringify(withTs));
   },
 
   getSymptoms: (userId?: string): SymptomLog[] => {
@@ -448,7 +461,11 @@ export const storage = {
 
   saveSymptoms: (symptoms: SymptomLog[], userId?: string) => {
     const key = getScopedKey('symptoms', userId);
-    localStorage.setItem(key, JSON.stringify(symptoms));
+    const withTs = (symptoms || []).map(s => ({
+      ...s,
+      updatedAt: s.updatedAt || new Date().toISOString(),
+    }));
+    localStorage.setItem(key, JSON.stringify(withTs));
   },
 
   getProfile: (userId?: string): UserProfile => {
@@ -573,6 +590,23 @@ export const storage = {
   saveGoogleHealthConfig: (config: GoogleHealthSyncConfig, userId?: string) => {
     const key = getScopedKey('google_health_config', userId);
     localStorage.setItem(key, JSON.stringify(config));
+  },
+
+  // --- Privacy & Community Research Settings ---
+  getPrivacySettings: (userId?: string): PrivacySettings => {
+    const key = getScopedKey('privacy_settings', userId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return { shareAnonymizedProtocolData: false };
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { shareAnonymizedProtocolData: false };
+    }
+  },
+
+  savePrivacySettings: (settings: PrivacySettings, userId?: string) => {
+    const key = getScopedKey('privacy_settings', userId);
+    localStorage.setItem(key, JSON.stringify(settings));
   },
 
   // --- Water & Hydration Tracking ---

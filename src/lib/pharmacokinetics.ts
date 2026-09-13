@@ -1,12 +1,12 @@
-import { Compound, Injection, Protocol, LabResult } from '../types';
+﻿import { Compound, Injection, Protocol, LabResult } from '../types';
 
 export interface CurveDataPoint {
   timestamp: number;        // ms
   dateLabel: string;        // '12/09 14:00'
   dayLabel: string;         // '12 Set'
   isFuture: boolean;
-  actualLevel: number;      // based on logged injections
-  projectedLevel: number;   // includes scheduled future protocol doses
+  actualLevel: number | null;     // based on logged injections (up to today)
+  projectedLevel: number | null;  // scheduled future protocol doses (today onwards)
   injectionPoint?: {
     dose: number;
     unit: string;
@@ -37,40 +37,9 @@ export interface SerumSummary {
 }
 
 /**
- * Solves for ka given ke and desired Tmax using Newton's method.
- * Tmax = ln(ka / ke) / (ka - ke)
- */
-export function calculateAbsorptionRate(halfLifeDays: number, peakHours: number): { ke: number; ka: number } {
-  const ke = Math.LN2 / Math.max(0.2, halfLifeDays);
-  const tmaxDays = Math.max(0.1, peakHours / 24);
-
-  // If tmax is very small or close to ke, default to a sensible ratio
-  let ka = 4.0 * ke;
-
-  // 10 iterations of Newton-Raphson to match Tmax
-  for (let i = 0; i < 12; i++) {
-    if (Math.abs(ka - ke) < 1e-6) ka = ke + 0.05;
-    const f = (Math.log(ka / ke) / (ka - ke)) - tmaxDays;
-    // Derivative of f with respect to ka:
-    // f'(ka) = [ (1/ka)*(ka - ke) - ln(ka/ke) ] / (ka - ke)^2
-    const num = (1 - ke / ka) - Math.log(ka / ke);
-    const den = Math.pow(ka - ke, 2);
-    const fPrime = num / den;
-    if (Math.abs(fPrime) < 1e-8) break;
-    const nextKa = ka - f / fPrime;
-    if (nextKa <= ke) {
-      ka = ke * 1.5;
-      break;
-    }
-    ka = nextKa;
-  }
-
-  return { ke, ka: Math.max(ka, ke * 1.2) };
-}
-
-/**
- * Single injection concentration at time delta (in days).
- * Bateman function: C(t) = D * F * (ka / (ka - ke)) * (e^(-ke * t) - e^(-ka * t))
+ * Calculates single injection concentration at delta time (in days).
+ * Uses exponential decay C(t) = Dose * exp(-k * t) with k = Math.LN2 / halfLifeDays,
+ * combined with depot absorption to produce a physiological sawtooth ("dente de serra") profile.
  */
 export function getSingleDoseConcentration(
   dose: number,
@@ -80,15 +49,30 @@ export function getSingleDoseConcentration(
   bioavailability: number = 1.0
 ): number {
   if (deltaDays < 0) return 0;
-  const { ke, ka } = calculateAbsorptionRate(halfLifeDays, peakHours);
-  
-  // Normalization factor so the integral or scale behaves predictably
-  const peakTmax = Math.log(ka / ke) / (ka - ke);
-  const maxConcentrationUnscaled = (ka / (ka - ke)) * (Math.exp(-ke * peakTmax) - Math.exp(-ka * peakTmax));
-  const scale = maxConcentrationUnscaled > 0 ? 1 / maxConcentrationUnscaled : 1;
+  const hl = Math.max(0.2, halfLifeDays);
+  // Cut off after 7 half-lives (< 0.8% remaining) to prevent runaway accumulation
+  if (deltaDays > 7 * hl) return 0;
 
-  // Theoretical relative peak equals the administered dose * bioavailability
-  const val = dose * bioavailability * scale * (ka / (ka - ke)) * (Math.exp(-ke * deltaDays) - Math.exp(-ka * deltaDays));
+  const k = Math.LN2 / hl; // Elimination rate constant k = ln(2) / half_life
+  const peakDays = Math.max(0.04, peakHours / 24); // Tmax in days
+  const effectiveDose = dose * bioavailability;
+
+  if (peakDays <= 0.05) {
+    // Immediate absorption / bolus: pure exponential elimination
+    return Math.max(0, effectiveDose * Math.exp(-k * deltaDays));
+  }
+
+  // First-order absorption + exponential elimination (Bateman model)
+  const ka = Math.LN2 / (peakDays * 0.4);
+  if (ka <= k) {
+    return Math.max(0, effectiveDose * Math.exp(-k * deltaDays));
+  }
+
+  const tmax = Math.log(ka / k) / (ka - k);
+  const maxVal = Math.exp(-k * tmax) - Math.exp(-ka * tmax);
+  const norm = maxVal > 0 ? 1 / maxVal : 1;
+
+  const val = effectiveDose * norm * (Math.exp(-k * deltaDays) - Math.exp(-ka * deltaDays));
   return Math.max(0, val);
 }
 
@@ -98,26 +82,23 @@ export function getSingleDoseConcentration(
 export function scaleToClinicalUnits(compound: Compound, relativeLevel: number): number {
   if (compound.category === 'steroid') {
     if (compound.subcategory === 'Testosterona' || compound.id.startsWith('test_') || compound.id === 'sustanon_blend') {
-      // Steady state: ~100mg/week of cypionate yields ~700-800 ng/dL in standard responders
-      return Math.round(relativeLevel * 8.5);
+      // Steady state: ~100mg/week of cypionate yields ~700-900 ng/dL in standard responders
+      return Math.round(relativeLevel * 4.8);
     }
-    // Outros anabólicos (Deca, Primo, Masteron, Trembo, Boldenona): release rate ativo em mg
-    return Number((relativeLevel * 0.75).toFixed(1));
+    // Outros esteroides anabolizantes: quantidade ativa em mg
+    return Number(relativeLevel.toFixed(1));
   }
 
   switch (compound.category) {
     case 'estrogen':
-      // 5mg valerate weekly yields ~150-300 pg/mL
-      return Math.round(relativeLevel * 50);
+      return Math.round(relativeLevel * 30);
     case 'peptide':
-      // Tirzepatide/Semaglutide/BPC: shown in active circulating amount
       if (compound.unit === 'mcg') {
-        return Math.round(relativeLevel * 1.5);
+        return Math.round(relativeLevel);
       }
-      return Number((relativeLevel * 0.15).toFixed(2));
+      return Number(relativeLevel.toFixed(2));
     case 'fertility':
-      // hCG in circulating IU
-      return Math.round(relativeLevel * 1.2);
+      return Math.round(relativeLevel);
     default:
       return Number(relativeLevel.toFixed(1));
   }
@@ -177,7 +158,7 @@ export function getUpcomingProtocolDoses(
       if (curr >= fromTime) {
         results.push({ timestamp: curr, dose: protocol.dose, protocolName: protocol.name });
       }
-      curr += (stepCount % 2 === 0 ? 3.5 : 3.5) * 86400000;
+      curr += 3.5 * 86400000;
       stepCount++;
     }
   } else if (protocol.frequency === 'weekly') {
@@ -213,7 +194,7 @@ export function generateSerumCurve(
   options: { daysPast?: number; daysFuture?: number; stepHours?: number } = {}
 ): { points: CurveDataPoint[]; summary: SerumSummary } {
   const daysPast = options.daysPast ?? 21;
-  const daysFuture = options.daysFuture ?? 14;
+  const daysFuture = options.daysFuture ?? 9;
   const stepHours = options.stepHours ?? 6;
 
   const now = Date.now();
@@ -234,7 +215,6 @@ export function generateSerumCurve(
 
   const points: CurveDataPoint[] = [];
 
-  // Helper to format dates
   const formatDateLabel = (d: Date) => {
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -253,9 +233,10 @@ export function generateSerumCurve(
 
   for (let t = startTime; t <= endTime; t += stepMs) {
     const isFuture = t > now;
+    const isTodayBridge = Math.abs(t - now) < stepMs;
     const dateObj = new Date(t);
 
-    // Sum actual injections
+    // Sum actual injections (up to time t)
     let actualSum = 0;
     relevantInjections.forEach(inj => {
       const injTime = new Date(inj.date).getTime();
@@ -271,9 +252,9 @@ export function generateSerumCurve(
       }
     });
 
-    // Projected level includes both past injections and planned future doses
+    // Projected level includes both past injections decaying and planned future doses
     let projectedSum = actualSum;
-    if (isFuture) {
+    if (isFuture || isTodayBridge) {
       futureDoses.forEach(dose => {
         if (t >= dose.timestamp) {
           const deltaDays = (t - dose.timestamp) / 86400000;
@@ -330,8 +311,10 @@ export function generateSerumCurve(
       dateLabel: formatDateLabel(dateObj),
       dayLabel: formatDayLabel(dateObj),
       isFuture,
-      actualLevel: isFuture ? (null as unknown as number) : scaledActual,
-      projectedLevel: scaledProjected,
+      // Solid curve up to today (bridge point included so line connects without gap)
+      actualLevel: isFuture && !isTodayBridge ? null : scaledActual,
+      // Projected curve from today onwards (bridge point included so dashed line connects)
+      projectedLevel: (!isFuture && !isTodayBridge) ? null : scaledProjected,
       injectionPoint: matchedInj ? {
         dose: matchedInj.dose,
         unit: compound.unit,

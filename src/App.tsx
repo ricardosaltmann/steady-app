@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { storage } from './lib/storage';
 import { auth } from './lib/auth';
 import { supabaseSync } from './lib/supabaseSync';
+import { mergeCollections } from './lib/syncMerge';
 import { notificationsService, isProtocolDueToday } from './lib/notifications';
 import { formatCompoundDose } from './lib/doseFormatter';
 import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, DailyWaterData, NotificationSettings } from './types';
@@ -81,33 +82,45 @@ export function App() {
       }
     }
 
-    // 2. Background Cloud Sync from Supabase if active
+    // 2. Safe Background Cloud Sync from Supabase with Merge Logic
     if (!uid.startsWith('user_demo')) {
       supabaseSync.getInjections(uid).then(cloudInjs => {
         if (cloudInjs && cloudInjs.length > 0) {
-          setInjections(cloudInjs);
-          storage.saveInjections(cloudInjs, uid);
+          const currentLocal = storage.getInjections(uid);
+          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudInjs);
+          setInjections(merged);
+          storage.saveInjections(merged, uid);
+          itemsToPushToCloud.forEach(inj => supabaseSync.saveInjection(inj, uid));
         }
       });
 
       supabaseSync.getProtocols(uid).then(cloudProtos => {
         if (cloudProtos && cloudProtos.length > 0) {
-          setProtocols(cloudProtos);
-          storage.saveProtocols(cloudProtos, uid);
+          const currentLocal = storage.getProtocols(uid);
+          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudProtos);
+          setProtocols(merged);
+          storage.saveProtocols(merged, uid);
+          itemsToPushToCloud.forEach(p => supabaseSync.saveProtocol(p, uid));
         }
       });
 
       supabaseSync.getLabs(uid).then(cloudLabs => {
         if (cloudLabs && cloudLabs.length > 0) {
-          setLabs(cloudLabs);
-          storage.saveLabs(cloudLabs, uid);
+          const currentLocal = storage.getLabs(uid);
+          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudLabs);
+          setLabs(merged);
+          storage.saveLabs(merged, uid);
+          itemsToPushToCloud.forEach(l => supabaseSync.saveLab(l, uid));
         }
       });
 
       supabaseSync.getSymptoms(uid).then(cloudSymptoms => {
         if (cloudSymptoms && cloudSymptoms.length > 0) {
-          setSymptoms(cloudSymptoms);
-          storage.saveSymptoms(cloudSymptoms, uid);
+          const currentLocal = storage.getSymptoms(uid);
+          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudSymptoms);
+          setSymptoms(merged);
+          storage.saveSymptoms(merged, uid);
+          itemsToPushToCloud.forEach(s => supabaseSync.saveSymptom(s, uid));
         }
       });
     }

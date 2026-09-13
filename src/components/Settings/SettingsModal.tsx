@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { UserProfile, Compound, CompoundCategory } from '../../types';
+import { UserProfile, Compound, CompoundCategory, PrivacySettings } from '../../types';
 import { storage } from '../../lib/storage';
 import { CompoundManager } from './CompoundManager';
-import { Settings, Download, Upload, RotateCcw, Plus, ShieldCheck, User, Sliders, X } from 'lucide-react';
+import { Settings, Download, Upload, RotateCcw, Plus, ShieldCheck, User, Sliders, X, Globe, Lock } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -28,6 +28,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onReloadAllData,
 }) => {
   const [activeTab, setActiveTab] = useState<'compounds' | 'profile' | 'backup'>('compounds');
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(() => storage.getPrivacySettings());
 
   // Profile form state
   const [name, setName] = useState(profile.name);
@@ -407,6 +408,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <RotateCcw className="w-4 h-4 text-amber-400" />
                 Restaurar Dados Demo
               </button>
+            </div>
+
+            {/* Isolated Opt-In Card: Community Protocol Research Data */}
+            <div className="p-4 bg-slate-900/90 border border-slate-700/80 rounded-2xl space-y-3 mt-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-cyan-400" />
+                    <span className="text-xs font-bold text-white">
+                      Pesquisa Comunitária & Estatísticas Anônimas (Opt-in)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Permite compartilhar anonimamente dados estruturais de protocolos (compostos, dosagens e frequências) para cálculo de médias comunitárias e aprimoramento dos modelos farmacocinéticos.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = {
+                      ...privacySettings,
+                      shareAnonymizedProtocolData: !privacySettings.shareAnonymizedProtocolData,
+                    };
+                    setPrivacySettings(updated);
+                    storage.savePrivacySettings(updated);
+                  }}
+                  className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                    privacySettings.shareAnonymizedProtocolData ? 'bg-cyan-600' : 'bg-slate-800 border border-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${
+                      privacySettings.shareAnonymizedProtocolData ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-[10px] text-slate-400 space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-slate-300">
+                  <Lock className="w-3 h-3 text-emerald-400" />
+                  Isolamento Total de Privacidade:
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                  <li>Totalmente independente da sincronização de saúde e Google Fit.</li>
+                  <li>Nenhum dado pessoal, e-mail, biometria ou exame é coletado.</li>
+                  <li>Você pode revogar ou ativar essa permissão a qualquer momento.</li>
+                </ul>
+              </div>
             </div>
           </div>
         )}

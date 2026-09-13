@@ -1,4 +1,4 @@
-export type CompoundCategory = 
+﻿export type CompoundCategory = 
   | 'steroid'     // Esteroides Anabolizantes & Androgênicos (TRT, Masteron, Deca, Primo, Trembo, etc.)
   | 'peptide'     // Peptídeos & Agonistas GLP-1 (Tirzepatida, Semaglutida, BPC-157, CJC, TB-500, etc.)
   | 'estrogen'    // Hormônios Femininos / HRT (Estradiol, Progesterona)
@@ -62,6 +62,7 @@ export interface Injection {
   notes?: string;
   needleInfo?: string;     // e.g. 30G 1/2", 27G 1/2", 25G 1"
   protocolId?: string;     // Protocolo vinculado
+  updatedAt?: string;      // ISO timestamp para merge seguro de dados
 }
 
 export type ProtocolFrequency = 
@@ -90,6 +91,7 @@ export interface Protocol {
   waterMl?: number;           // Água bacteriostática adicionada (ex: 2.6mL)
   concentrationMgMl?: number; // Concentração resultante em mg/mL (ex: 7.69)
   syringeUnits?: number;      // Unidades na seringa U-100 (ex: 32.5 UI)
+  updatedAt?: string;         // ISO timestamp para merge seguro de dados
 }
 
 export interface LabMarker {
@@ -113,6 +115,7 @@ export interface LabResult {
   }[];
   labName?: string;
   notes?: string;
+  updatedAt?: string;    // ISO timestamp para merge seguro de dados
 }
 
 export interface SymptomLog {
@@ -135,6 +138,7 @@ export interface SymptomLog {
   thighCm?: number;        // Coxa (cm)
   chestCm?: number;        // Peitoral / Tórax (cm)
   notes?: string;
+  updatedAt?: string;      // ISO timestamp para merge seguro de dados
 }
 
 export interface UserProfile {
@@ -181,6 +185,10 @@ export interface GoogleHealthSyncConfig {
   autoSync: boolean;
 }
 
+export interface PrivacySettings {
+  shareAnonymizedProtocolData: boolean;
+}
+
 export interface WaterLogEntry {
   id: string;
   time: string; // HH:mm
@@ -203,5 +211,3 @@ export interface NotificationSettings {
   lastWaterReminderTimestamp?: number;
   lastMedReminderDate?: string;
 }
-
-

@@ -1,10 +1,22 @@
-import { UserAccount, CompoundCategory } from '../types';
+﻿import { UserAccount, CompoundCategory } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const AUTH_STORAGE_KEYS = {
   USERS: 'steady_users_v1',
   CURRENT_USER_ID: 'steady_current_user_id_v1',
   CACHED_USER: 'steady_cached_user_v1',
+};
+
+// Explicit Admin Whitelist - Prevents insecure prefix matching
+export const ADMIN_WHITELIST: string[] = [
+  'admin@steadysync.com',
+  'ricardosaltmann@gmail.com',
+  'admin@steady.app',
+];
+
+export const isUserAdmin = (email: string, dbIsAdmin?: boolean): boolean => {
+  if (dbIsAdmin === true) return true;
+  return ADMIN_WHITELIST.includes(email.toLowerCase().trim());
 };
 
 // Default pre-seeded demo user so testers can log in with 1 click
@@ -94,7 +106,7 @@ export const auth = {
             selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories,
             createdAt: data.user.created_at,
             therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
-            isAdmin: Boolean(profile?.is_admin || cleanEmail.startsWith('admin@')),
+            isAdmin: isUserAdmin(cleanEmail, profile?.is_admin),
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
@@ -171,22 +183,21 @@ export const auth = {
 
         if (data.user) {
           try {
-            // Attempt upsert with full profile fields
-            const { error: profileErr } = await supabase.from('profiles').upsert({
-              id: data.user.id,
-              name: name.trim(),
-              phone: phone?.trim() || null,
-              age: age ? Number(age) : null,
-              gender,
-              therapeutic_goal: therapeuticGoal,
-              updated_at: new Date().toISOString(),
-            });
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', data.user.id)
+              .single();
 
-            if (profileErr) {
-              // Fallback to basic columns if extended columns don't exist yet
-              await supabase.from('profiles').upsert({
+            if (!existingProfile) {
+              await supabase.from('profiles').insert({
                 id: data.user.id,
+                email: cleanEmail,
                 name: name.trim(),
+                phone: phone?.trim() || null,
+                age: age ? Number(age) : null,
+                gender,
+                selected_categories: selectedCategories,
                 therapeutic_goal: therapeuticGoal,
                 updated_at: new Date().toISOString(),
               });
@@ -205,7 +216,7 @@ export const auth = {
             selectedCategories,
             createdAt: data.user.created_at || new Date().toISOString(),
             therapeuticGoal,
-            isAdmin: cleanEmail.startsWith('admin@'),
+            isAdmin: isUserAdmin(cleanEmail),
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
@@ -234,7 +245,7 @@ export const auth = {
       passwordHash: password,
       createdAt: new Date().toISOString(),
       therapeuticGoal,
-      isAdmin: cleanEmail.startsWith('admin@'),
+      isAdmin: isUserAdmin(cleanEmail),
     };
 
     users.push(newUser);
