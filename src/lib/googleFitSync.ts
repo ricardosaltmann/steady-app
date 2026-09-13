@@ -31,11 +31,15 @@ export const googleFitSync = {
       return { success: false, error: 'Serviço de nuvem Supabase não configurado.' };
     }
     try {
+      // In native Android app, use custom scheme com.steadysync.app:// to return directly to the app
+      const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform();
+      const redirectTo = isNative ? 'com.steadysync.app://' : window.location.origin;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           scopes: 'https://www.googleapis.com/auth/fitness.body.read email profile',
-          redirectTo: window.location.origin,
+          redirectTo,
         },
       });
       if (error) throw error;
