@@ -922,71 +922,162 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
               )}
             </div>
 
-            {/* Status da Conexão & Alertas */}
+            {/* Status da Conexão & Formulários de Vinculação */}
             <div className="mt-5 p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-3 w-3">
-                    {googleConfig.connected && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    )}
-                    <span className={`relative inline-flex rounded-full h-3 w-3 ${googleConfig.connected ? 'bg-emerald-500' : 'bg-slate-600'}`}></span>
-                  </span>
-                  <div>
-                    <div className="text-xs font-bold text-white flex items-center gap-2 flex-wrap">
-                      <span>Conta Vinculada:</span>
-                      <span className="text-emerald-300 font-mono">{googleConfig.email || 'Nenhuma conta vinculada'}</span>
-                      {hasOAuthToken ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
-                          OAuth Nuvem Ativo
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/70 text-amber-300 border border-amber-800/60">
-                          Modo Local / E-mail
-                        </span>
-                      )}
+              {googleConfig.connected ? (
+                /* ESTADO: CONECTADO */
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-2 flex-wrap">
+                          <span>Conta Vinculada:</span>
+                          <span className="text-emerald-300 font-mono">{googleConfig.email}</span>
+                          {hasOAuthToken ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                              OAuth Cloud Ativo
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/70 text-cyan-300 border border-cyan-800/60">
+                              E-mail Vinculado
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {googleConfig.lastSyncAt 
+                            ? `Última sincronização: ${new Date(googleConfig.lastSyncAt).toLocaleString('pt-BR')}`
+                            : 'Pronto para sincronizar'}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {googleConfig.lastSyncAt 
-                        ? `Última sincronização: ${new Date(googleConfig.lastSyncAt).toLocaleString('pt-BR')}`
-                        : 'Pronto para importar e sincronizar'}
-                    </p>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-300 font-medium">Auto-sincronizar:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = googleFitSync.toggleAutoSync(!googleConfig.autoSync);
+                            setGoogleConfig(updated);
+                          }}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                            googleConfig.autoSync ? 'bg-emerald-600' : 'bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              googleConfig.autoSync ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleDisconnect}
+                        className="px-3 py-1.5 rounded-xl border border-slate-800 hover:border-rose-500/40 hover:bg-rose-950/30 text-slate-400 hover:text-rose-300 text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        Trocar Conta
+                      </button>
+                    </div>
                   </div>
+
+                  {!hasOAuthToken && (
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-semibold text-white">Ativar Conexão Direta de Nuvem Google</span>
+                        <p className="text-[11px] text-slate-400">Autorize o token OAuth com sua conta Google configurada no Supabase.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleOAuthLogin}
+                        disabled={isSyncing}
+                        className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-xs shadow transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                          <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                        </svg>
+                        <span>Autorizar OAuth Google</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-
-                {googleConfig.connected && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-slate-300 font-medium">Auto-sincronizar:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = googleFitSync.toggleAutoSync(!googleConfig.autoSync);
-                        setGoogleConfig(updated);
-                      }}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
-                        googleConfig.autoSync ? 'bg-emerald-600' : 'bg-slate-700'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          googleConfig.autoSync ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
+              ) : (
+                /* ESTADO: DESCONECTADO - FORMS PARA INFORMAR CONTA */
+                <div className="space-y-4">
+                  <div className="text-xs font-bold text-white flex items-center gap-2">
+                    <Link2 className="w-4 h-4 text-cyan-400" />
+                    <span>Conecte sua Conta para Sincronizar</span>
                   </div>
-                )}
-              </div>
 
-              {/* Informação sobre Token de API vs Login por E-mail */}
-              {!hasOAuthToken && (
-                <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 text-xs space-y-1.5">
-                  <div className="flex items-center gap-2 text-cyan-400 font-semibold">
-                    <Info className="w-4 h-4 shrink-0 text-cyan-400" />
-                    <span>Como seus dados do Fitbit chegam ao SteadySync</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* OPÇÃO 1: INFORMAR POR E-MAIL */}
+                    <form onSubmit={handleConnectGoogleEmail} className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
+                      <div>
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Link2 className="w-4 h-4 text-cyan-400" />
+                          Informar E-mail da Conta Google
+                        </span>
+                        <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                          Digite o endereço de e-mail da sua conta Google ou do app Fitbit para vincular ao aplicativo.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <input
+                          type="email"
+                          required
+                          placeholder="seu.email@gmail.com"
+                          value={googleEmailInput}
+                          onChange={e => setGoogleEmailInput(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-700 focus:border-cyan-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSyncing}
+                          className="w-full py-2.5 px-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Vincular Conta por E-mail</span>
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* OPÇÃO 2: LOGIN DIRETO COM GOOGLE OAUTH */}
+                    <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between space-y-3">
+                      <div>
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-emerald-400" />
+                          Conectar com 1 Clique (Google OAuth)
+                        </span>
+                        <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                          Acesse via autenticação oficial da Google habilitada no seu Supabase para sincronização em nuvem.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleOAuthLogin}
+                        disabled={isSyncing}
+                        className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                          <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                        </svg>
+                        <span>Entrar com a Conta Google</span>
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Seu aplicativo <strong>Fitbit</strong> sincroniza automaticamente suas pesagens com o <strong>Google Health Connect</strong> no seu Android. O SteadySync consulta diretamente esse banco de dados de saúde no seu celular, sem depender de autenticação externa na web.
-                  </p>
                 </div>
               )}
 
