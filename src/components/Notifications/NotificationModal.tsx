@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Protocol, Compound, NotificationSettings } from '../../types';
 import { Bell, Syringe, Droplets, Volume2, Check, X, Sparkles, Clock, AlertCircle } from 'lucide-react';
 import { notificationsService, isProtocolDueToday } from '../../lib/notifications';
+import { formatCompoundDose } from '../../lib/doseFormatter';
 
 interface NotificationModalProps {
   protocols: Protocol[];
@@ -86,7 +87,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
     const comp = firstDue ? compounds.find(c => c.id === firstDue.compoundId) : null;
     notificationsService.sendMedicationReminder(
       firstDue ? firstDue.name : 'Durateston TRT',
-      firstDue ? `${firstDue.dose} ${comp?.unit || 'mg'}` : '250mg',
+      firstDue ? formatCompoundDose(firstDue.dose, comp?.unit).fullText : '250mg',
       localSettings.soundEnabled
     );
     setTestSent('med');
@@ -225,7 +226,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                             <div>
                               <span className="font-bold text-white block">{p.name}</span>
                               <span className="text-[11px] text-slate-400">
-                                {p.dose} {comp?.unit || 'mg'} • {comp?.name}
+                                {formatCompoundDose(p.dose, comp?.unit).fullText} • {comp?.name}
                               </span>
                             </div>
                             <button

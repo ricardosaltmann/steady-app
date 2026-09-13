@@ -3,6 +3,7 @@ import { storage } from './lib/storage';
 import { auth } from './lib/auth';
 import { supabaseSync } from './lib/supabaseSync';
 import { notificationsService, isProtocolDueToday } from './lib/notifications';
+import { formatCompoundDose } from './lib/doseFormatter';
 import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, DailyWaterData, NotificationSettings } from './types';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { Header } from './components/Navigation/Header';
@@ -136,9 +137,10 @@ export function App() {
           if (currentHourMinute >= (notificationSettings.medicationTime || '08:00')) {
             const first = due[0];
             const comp = compounds.find(c => c.id === first.compoundId);
+            const compDoseStr = formatCompoundDose(first.dose, comp?.unit).fullText;
             notificationsService.sendMedicationReminder(
               first.name,
-              `${first.dose} ${comp?.unit || 'mg'}`,
+              compDoseStr,
               notificationSettings.soundEnabled
             );
             const updated = { ...notificationSettings, lastMedReminderDate: todayStr };
@@ -424,7 +426,7 @@ export function App() {
                               {proto.name}
                             </span>
                             <span className="text-[11px] text-slate-400">
-                              {proto.dose} {comp?.unit || 'mg'} • {comp?.name}
+                              {formatCompoundDose(proto.dose, comp?.unit).fullText} • {comp?.name}
                             </span>
                           </div>
                           <button

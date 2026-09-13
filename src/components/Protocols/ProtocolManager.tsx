@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Protocol, Compound, ProtocolFrequency } from '../../types';
 import { Calendar, Plus, CheckCircle2, Clock, Trash2, Edit3, ShieldAlert, Sparkles, Droplets, Syringe, X } from 'lucide-react';
+import { formatCompoundDose, getWeeklyTotalDose } from '../../lib/doseFormatter';
 
 interface ProtocolManagerProps {
   protocols: Protocol[];
@@ -137,18 +138,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
   // Helper to compute weekly total dose
   const getWeeklyTotal = (p: Protocol, comp?: Compound) => {
-    let multiplier = 1;
-    switch (p.frequency) {
-      case 'daily': multiplier = 7; break;
-      case 'eod': multiplier = 3.5; break;
-      case 'every_3_5_days': multiplier = 2; break;
-      case 'weekly': multiplier = 1; break;
-      case 'biweekly': multiplier = 0.5; break;
-      case 'monthly': multiplier = 0.25; break;
-      case 'every_x_days': multiplier = p.intervalDays ? 7 / p.intervalDays : 2; break;
-    }
-    const total = (p.dose * multiplier).toFixed(1);
-    return `${total} ${comp?.unit || 'mg'}/semana`;
+    return getWeeklyTotalDose(p, comp);
   };
 
   const frequencyLabels: Record<ProtocolFrequency, string> = {
@@ -246,7 +236,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
                         Dose por Aplicação
                       </span>
                       <div className="font-extrabold text-sm text-blue-400">
-                        {p.dose} {comp?.unit || 'mg'} ({p.route})
+                        {formatCompoundDose(p.dose, comp?.unit).fullText} ({p.route})
                       </div>
                     </div>
 
@@ -494,7 +484,14 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">Dose por Aplicação</label>
+                  <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <span>Dose por Aplicação</span>
+                    {selectedComp?.unit === 'mcg' && (
+                      <span className="text-amber-400 font-medium text-[10px]">
+                        {parseFloat(dose) > 0 ? `= ${(parseFloat(dose) * 1000).toFixed(0)} mcg` : 'em mg (ex: 0.1 mg = 100 mcg)'}
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     step="any"

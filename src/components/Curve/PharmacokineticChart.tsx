@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { Compound, Injection, Protocol, LabResult, SymptomLog } from '../../types';
 import { generateSerumCurve, getDisplayUnit } from '../../lib/pharmacokinetics';
+import { formatCompoundDose } from '../../lib/doseFormatter';
 import {
   Activity,
   Calendar,
@@ -271,7 +272,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
               <div key={idx} className="p-1.5 bg-blue-950/40 border border-blue-800/50 rounded-lg text-blue-200 text-[11px] flex items-center justify-between">
                 <span className="flex items-center gap-1 truncate font-medium">
                   <Syringe className="w-3 h-3 text-blue-400 shrink-0" />
-                  {inj.compoundName || 'Injeção'}: {inj.dose} {inj.unit}
+                  {inj.compoundName || 'Injeção'}: {formatCompoundDose(inj.dose, inj.unit).fullText}
                 </span>
                 <span className="text-[10px] text-slate-400 uppercase">{inj.site}</span>
               </div>
@@ -404,9 +405,9 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                               <div className="truncate">
                                 <span className="font-semibold block truncate">{s.name}</span>
-                                <span className="text-[10px] text-slate-400 truncate">
-                                  {s.protocol?.dose ? `${s.protocol.dose} ${s.unit}` : s.compoundName} • {s.clinicalUnit}
-                                </span>
+                                  <span className="text-[10px] text-slate-400 truncate">
+                                    {s.protocol?.dose ? `${formatCompoundDose(s.protocol.dose, s.unit).fullText}` : s.compoundName} • {s.clinicalUnit}
+                                  </span>
                               </div>
                             </div>
                             <div 

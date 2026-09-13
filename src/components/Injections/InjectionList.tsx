@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Injection, Compound } from '../../types';
 import { INJECTION_SITE_LABELS } from '../../lib/defaultCompounds';
+import { formatCompoundDose } from '../../lib/doseFormatter';
 import { Syringe, Trash2, Calendar, MapPin, Search, Filter } from 'lucide-react';
 
 interface InjectionListProps {
@@ -168,7 +169,7 @@ export const InjectionList: React.FC<InjectionListProps> = ({
                         {comp?.name || 'Composto'}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/60 text-blue-300 border border-blue-800/50">
-                        {inj.dose} {comp?.unit || 'mg'}
+                        {formatCompoundDose(inj.dose, comp?.unit).fullText}
                       </span>
                       {inj.volumeMl && (
                         <span className="text-[11px] text-slate-400 font-medium">
