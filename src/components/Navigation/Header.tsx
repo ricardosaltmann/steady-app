@@ -63,8 +63,10 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-black tracking-tight text-white text-lg">Steady</span>
-                <span className="text-[9px] uppercase font-extrabold tracking-widest px-1.5 py-0.5 rounded bg-blue-950/90 text-blue-400 border border-blue-800/60">
+                <span className="font-black tracking-tight text-white text-lg">
+                  Steady<span className="text-cyan-400">Sync</span>
+                </span>
+                <span className="text-[9px] uppercase font-extrabold tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/90 text-cyan-400 border border-cyan-800/60">
                   BIO
                 </span>
               </div>

@@ -280,7 +280,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   // Export JSON
   const handleExportJson = () => {
     const payload = {
-      app: 'Steady Protocol Tracker',
+      app: 'SteadySync Protocol Tracker',
       version: '2.0.0',
       exportedAt: new Date().toISOString(),
       user: {
@@ -322,7 +322,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steady_google_health_export_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `steadysync_google_health_export_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -353,7 +353,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steady_dados_saude_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `steadysync_dados_saude_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -992,7 +992,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                 Balanças inteligentes das marcas <strong>Xiaomi Mi Body</strong>, <strong>Withings</strong>, <strong>Renpho</strong>, <strong>Garmin</strong> e <strong>Omron</strong> gravam suas pesagens automaticamente no <strong>Google Health Connect / Google Fit</strong> via Bluetooth.
               </p>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Ao conectar sua conta Google aqui no Steady, essas medições chegam automaticamente ao seu gráfico, correlacionando a evolução de peso com suas aplicações de peptídeos.
+                Ao conectar sua conta Google aqui no SteadySync, essas medições chegam automaticamente ao seu gráfico, correlacionando a evolução de peso com suas aplicações de peptídeos.
               </p>
             </div>
 

@@ -1,7 +1,7 @@
 {
-  "short_name": "Steady",
-  "name": "Steady - Protocol Tracker",
-  "description": "Acompanhamento farmacocinético avançado de TRT, esteroides e peptídeos.",
+  "short_name": "SteadySync",
+  "name": "SteadySync - Protocol Tracker",
+  "description": "Acompanhamento farmacocinético avançado e sincronização de saúde para TRT, esteroides e peptídeos.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#070a12",

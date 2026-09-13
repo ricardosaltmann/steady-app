@@ -21,7 +21,7 @@ export function AdminPanel({ currentUser, onClose, compounds, onAddGlobalCompoun
   const [loading, setLoading] = useState(true);
   const [searchUser, setSearchUser] = useState('');
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
-  const [maintenanceMessage, setMaintenanceMessage] = useState('Estamos atualizando os modelos clínicos do Steady. Voltamos em alguns instantes.');
+  const [maintenanceMessage, setMaintenanceMessage] = useState('Estamos atualizando os modelos clínicos do SteadySync. Voltamos em alguns instantes.');
 
   // Form states for new global compound
   const [newCompoundName, setNewCompoundName] = useState('');
@@ -91,7 +91,7 @@ export function AdminPanel({ currentUser, onClose, compounds, onAddGlobalCompoun
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steady_usuarios_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `steadysync_usuarios_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

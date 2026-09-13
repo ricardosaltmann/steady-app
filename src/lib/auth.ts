@@ -10,8 +10,8 @@ const AUTH_STORAGE_KEYS = {
 // Default pre-seeded demo user so testers can log in with 1 click
 const DEMO_USER: UserAccount = {
   id: 'user_demo',
-  name: 'Usuário Teste / Atleta TRT',
-  email: 'demo@steady.app',
+  name: 'Usuário Teste / Atleta SteadySync',
+  email: 'demo@steadysync.app',
   phone: '(11) 99999-8888',
   age: 34,
   gender: 'male',
@@ -108,7 +108,7 @@ export const auth = {
 
     // 2. Local fallback
     const users = auth.getUsers();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const user = users.find(u => u.email.toLowerCase() === cleanEmail || (u.id === DEMO_USER.id && cleanEmail === 'demo@steady.app'));
 
     if (!user) {
       return { success: false, error: 'E-mail não encontrado. Crie uma conta ou use a conta Demo.' };

@@ -1,4 +1,4 @@
-# Steady Protocol Tracker 💉✨
+# SteadySync Protocol Tracker 💉✨
 
 > **Plataforma avançada para farmacocinética, monitoramento e gestão clínica de reposição hormonal (TRT/HRT), peptídeos regenerativos e agonistas GLP-1.**
 
@@ -97,4 +97,4 @@ Os arquivos otimizados serão gerados no diretório `dist/`.
 
 ---
 
-© Steady • Plataforma Clínica de Acompanhamento Hormonal e Peptídeos
+© SteadySync • Plataforma Clínica de Acompanhamento Hormonal e Peptídeos

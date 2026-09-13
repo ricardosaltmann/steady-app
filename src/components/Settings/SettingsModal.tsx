@@ -116,7 +116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Settings className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Configurações do Steady</h3>
+              <h3 className="text-base font-bold text-white">Configurações do SteadySync</h3>
               <p className="text-xs text-slate-400">Gerencie seus compostos visíveis, dados e perfil</p>
             </div>
           </div>
@@ -366,7 +366,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Armazenamento Local & Privacidade Absoluta
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              O <strong>Steady</strong> armazena seus dados exclusivamente no banco de dados local do seu navegador (LocalStorage/IndexedDB). Suas informações médicas e dosagens nunca são enviadas para servidores externos.
+              O <strong>SteadySync</strong> armazena seus dados exclusivamente no banco de dados local do seu navegador (LocalStorage/IndexedDB). Suas informações médicas e dosagens nunca são enviadas para servidores externos.
             </p>
 
             <div className="flex flex-wrap gap-2.5 pt-2">

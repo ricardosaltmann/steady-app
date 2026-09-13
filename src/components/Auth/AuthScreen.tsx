@@ -221,7 +221,9 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
             <Activity className="w-8 h-8 text-slate-950 stroke-[2.5]" />
           </div>
           <div className="flex items-center justify-center gap-2">
-            <h1 className="text-3xl font-black tracking-tight text-white">Steady</h1>
+            <h1 className="text-3xl font-black tracking-tight text-white">
+              Steady<span className="text-cyan-400">Sync</span>
+            </h1>
             <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60">
               v1.0 Beta
             </span>
@@ -381,7 +383,7 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                       <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-                      O que você pretende acompanhar no Steady?
+                      O que você pretende acompanhar no SteadySync?
                     </label>
                     <span className="text-[10px] text-slate-400">Selecione 1 ou mais</span>
                   </div>
@@ -439,7 +441,7 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
               <input
                 type="email"
                 required
-                placeholder={isRegister ? "seu.email@exemplo.com" : "demo@steady.app"}
+                placeholder={isRegister ? "seu.email@exemplo.com" : "demo@steadysync.app"}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
@@ -481,7 +483,7 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
         {/* Footer info */}
         <div className="text-center mt-4">
           <p className="text-[11px] text-slate-400">
-            © {new Date().getFullYear()} Steady Protocol Tracker • Feito para testes clínicos e esportivos
+            © {new Date().getFullYear()} SteadySync Protocol Tracker • Feito para testes clínicos e esportivos
           </p>
         </div>
       </div>
