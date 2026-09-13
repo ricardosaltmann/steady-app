@@ -17,7 +17,8 @@ import {
   Heart, 
   CheckCircle2, 
   Circle,
-  Sliders
+  Sliders,
+  KeyRound
 } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -80,6 +81,9 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
 
 export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
   const [isRegister, setIsRegister] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
   
   // Credentials
   const [email, setEmail] = useState('');
@@ -94,6 +98,26 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setResetMessage(null);
+    setResetLoading(true);
+
+    try {
+      const res = await auth.resetPassword(email);
+      if (res.success) {
+        setResetMessage(res.message);
+      } else {
+        setError(res.error || 'Erro ao recuperar senha.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro inesperado ao solicitar recuperação.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   // Handle sex switch with intelligent category presets
   const handleGenderChange = (newGender: 'male' | 'female') => {
@@ -234,7 +258,7 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
         </div>
 
         {/* 1-Click Fast Demo Card for Testers (shown on login tab) */}
-        {!isRegister && (
+        {!isRegister && !isForgotPassword && (
           <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-slate-900 to-emerald-950/40 border border-cyan-500/30 shadow-lg shadow-cyan-950/40 relative overflow-hidden">
             <div className="flex items-start justify-between gap-3 mb-2">
               <div>
@@ -260,38 +284,110 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
 
         {/* Main Auth Form Box */}
         <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl">
-          {/* Tabs: Login / Register */}
-          <div className="grid grid-cols-2 p-1 bg-slate-950/80 rounded-xl border border-slate-800 mb-5">
-            <button
-              type="button"
-              onClick={() => { setIsRegister(false); setError(null); }}
-              className={`py-2 text-xs font-semibold rounded-lg transition-all ${
-                !isRegister 
-                  ? 'bg-slate-800 text-white shadow-sm' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Entrar na Conta
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsRegister(true); setError(null); }}
-              className={`py-2 text-xs font-semibold rounded-lg transition-all ${
-                isRegister 
-                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Criar Nova Conta
-            </button>
-          </div>
+          {isForgotPassword ? (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-cyan-400" />
+                  Recuperar Senha
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(false); setError(null); setResetMessage(null); }}
+                  className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Voltar ao login
+                </button>
+              </div>
 
-          {error && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{error}</span>
+              <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                Informe o seu e-mail cadastrado. Enviaremos o link para redefinir sua senha (no Supabase) ou as instruções locais de acesso.
+              </p>
+
+              {error && (
+                <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {resetMessage && (
+                <div className="mb-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">{resetMessage}</span>
+                </div>
+              )}
+
+              {!resetMessage ? (
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                      Seu E-mail Cadastrado
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="seu.email@exemplo.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>{resetLoading ? 'Solicitando...' : 'Recuperar Minha Senha'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(false); setError(null); setResetMessage(null); }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+                >
+                  Voltar para Tela de Login
+                </button>
+              )}
             </div>
-          )}
+          ) : (
+            <>
+              {/* Tabs: Login / Register */}
+              <div className="grid grid-cols-2 p-1 bg-slate-950/80 rounded-xl border border-slate-800 mb-5">
+                <button
+                  type="button"
+                  onClick={() => { setIsRegister(false); setError(null); }}
+                  className={`py-2 text-xs font-semibold rounded-lg transition-all ${
+                    !isRegister 
+                      ? 'bg-slate-800 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Entrar na Conta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsRegister(true); setError(null); }}
+                  className={`py-2 text-xs font-semibold rounded-lg transition-all ${
+                    isRegister 
+                      ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30' 
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Criar Nova Conta
+                </button>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
@@ -449,10 +545,21 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-cyan-400" />
-                Senha
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                  Senha
+                </label>
+                {!isRegister && (
+                  <button
+                    type="button"
+                    onClick={() => { setIsForgotPassword(true); setError(null); setResetMessage(null); }}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 hover:underline transition-colors cursor-pointer"
+                  >
+                    Esqueceu a senha?
+                  </button>
+                )}
+              </div>
               <input
                 type="password"
                 required
@@ -472,6 +579,8 @@ export function AuthScreen({ onLoginSuccess }: AuthScreenProps) {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+            </>
+          )}
 
           {/* Privacy badge */}
           <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[11px] text-slate-400">

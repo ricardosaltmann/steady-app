@@ -309,6 +309,42 @@ export const auth = {
 
     return updated;
   },
+
+  resetPassword: async (email: string): Promise<{ success: boolean; message: string; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, error: 'Por favor, informe seu e-mail cadastrado.', message: '' };
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: window.location.origin,
+        });
+        if (error) {
+          return { success: false, error: error.message, message: '' };
+        }
+        return { 
+          success: true, 
+          message: `Instruções de recuperação foram enviadas para ${cleanEmail}. Verifique sua caixa de entrada e spam.` 
+        };
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Erro ao conectar ao serviço de autenticação.', message: '' };
+      }
+    }
+
+    // Local fallback for offline/demo accounts
+    const users = auth.getUsers();
+    const found = users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (found) {
+      return {
+        success: true,
+        message: `Sua senha cadastrada no aparelho é: "${found.passwordHash || 'steady123'}". Você já pode utilizá-la para entrar.`,
+      };
+    }
+
+    return { success: false, error: 'Nenhum usuário encontrado com este e-mail.', message: '' };
+  },
 };
 
 function splitEmail(email: string): string {
