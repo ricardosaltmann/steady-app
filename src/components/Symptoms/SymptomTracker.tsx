@@ -50,6 +50,7 @@ import {
 interface SymptomTrackerProps {
   symptoms: SymptomLog[];
   onSaveSymptom: (log: SymptomLog) => void;
+  onSaveSymptoms?: (logs: SymptomLog[]) => void;
   onDeleteSymptom: (id: string) => void;
   profile?: UserProfile;
   onSaveProfile?: (profile: UserProfile) => void;
@@ -79,6 +80,7 @@ export function calculateIMC(weightKg: number, heightCm: number): {
 export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   symptoms,
   onSaveSymptom,
+  onSaveSymptoms,
   onDeleteSymptom,
   profile,
   onSaveProfile,
@@ -189,25 +191,15 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   }, []);
 
-  // Filter and sort weight and health entries
+  // Filter and sort weight entries - Exclui estritamente dias sem pesagem real para evitar linhas em branco
   const weightEntries = useMemo(() => {
     return symptoms
-      .filter(s => 
-        (s.weightKg && s.weightKg > 0) ||
-        (s.bodyFatPercent && s.bodyFatPercent > 0) ||
-        (s.steps && s.steps > 0) ||
-        (s.sleepHours && s.sleepHours > 0) ||
-        (s.heartRateBpm && s.heartRateBpm > 0) ||
-        (s.waterMl && s.waterMl > 0) ||
-        (s.waistCm && s.waistCm > 0)
-      )
+      .filter(s => typeof s.weightKg === 'number' && s.weightKg > 0)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [symptoms]);
 
-  const latestWeightEntry = weightEntries.find(s => s.weightKg && s.weightKg > 0);
-  const oldestWeightEntry = [...weightEntries].reverse().find(s => s.weightKg && s.weightKg > 0);
-  const latestWeight = latestWeightEntry?.weightKg || profile?.weightKg || 82.0;
-  const oldestWeight = oldestWeightEntry?.weightKg || latestWeight;
+  const latestWeight = weightEntries[0]?.weightKg || profile?.weightKg || 82.0;
+  const oldestWeight = weightEntries[weightEntries.length - 1]?.weightKg || latestWeight;
   const weightChange = latestWeight - oldestWeight;
   const currentIMC = calculateIMC(latestWeight, currentHeight);
 
@@ -318,17 +310,22 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   };
 
-  // Sync Now with connected Google Account / Health Connect
-  const handleSyncNow = async () => {
-    setIsSyncing(true);
-    setSyncFeedback(null);
-    try {
-      console.log('[Health Connect] Iniciando fluxo de sincronização completo...');
+  // Ref para garantir execução única do auto-sync por ciclo de montagem
+  const autoSyncRanRef = useRef<boolean>(false);
 
-      // 1. Chamar o método de solicitar permissões nativas (requestPermissions) para TODOS os escopos
-      if (Capacitor.isNativePlatform()) {
+  // Sync Now with connected Google Account / Health Connect
+  const handleSyncNow = async (isManualClick: boolean = true) => {
+    setIsSyncing(true);
+    if (isManualClick) {
+      setSyncFeedback(null);
+    }
+    try {
+      console.log(`[Health Connect] Iniciando sincronização (${isManualClick ? 'Manual' : 'Automática silenciosa'})...`);
+
+      // 1. Chamar o método de solicitar permissões nativas APENAS se for clique manual
+      if (Capacitor.isNativePlatform() && isManualClick) {
         try {
-          console.log('[Health Connect] Disparando requestPermissions nativo para Peso, Gordura, Passos, Sono, BPM e Hidratação...');
+          console.log('[Health Connect] Disparando requestPermissions nativo...');
           const permResult = await HealthConnect.requestPermissions({
             permissions: ['weight', 'bodyFat', 'height', 'steps', 'sleep', 'heartRate', 'hydration']
           });
@@ -365,35 +362,59 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
           const hydCount = hcData?.hydration?.length ?? 0;
           const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + hydCount;
 
-          // Alerta visual de debug solicitado pelo usuário mostrando a riqueza de registros
-          alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
+          // Alerta visual de debug solicitado pelo usuário APENAS no clique manual
+          if (isManualClick) {
+            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
+          }
           console.log('[Health Connect] Resultado de leitura completa:', hcData);
         } catch (readErr: any) {
           console.error('[Health Connect Error] Erro ao executar leitura:', readErr);
-          alert("Erro no Health Connect: " + (readErr?.message || JSON.stringify(readErr)));
+          if (isManualClick) {
+            alert("Erro no Health Connect: " + (readErr?.message || JSON.stringify(readErr)));
+          }
         }
       }
 
       // 3. Executar o agrupamento e merge inteligente por data (Health Connect + Google Fit)
       const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight, undefined, hcData);
       if (res.newLogs.length > 0) {
-        res.newLogs.forEach(log => onSaveSymptom(log));
+        if (onSaveSymptoms) {
+          onSaveSymptoms(res.newLogs);
+        } else {
+          res.newLogs.forEach(log => onSaveSymptom(log));
+        }
       }
-      if (res.success || !isGoogleUser) {
-        setSyncFeedback({ type: res.success ? 'success' : 'error', message: res.message });
+      if (isManualClick) {
+        if (res.success || !isGoogleUser) {
+          setSyncFeedback({ type: res.success ? 'success' : 'error', message: res.message });
+        }
       }
       setGoogleConfig(storage.getGoogleHealthConfig());
       setHasOAuthToken(res.hasOAuthToken || isGoogleUser);
     } catch (err: any) {
       console.error('[Health Connect Error] Erro ao sincronizar Health Connect:', err);
-      setSyncFeedback({ 
-        type: 'error', 
-        message: `Falha ao buscar no Health Connect: ${err?.message || 'Erro inesperado'}. Verifique as permissões de saúde nas configurações do Android.` 
-      });
+      if (isManualClick) {
+        setSyncFeedback({ 
+          type: 'error', 
+          message: `Falha ao buscar no Health Connect: ${err?.message || 'Erro inesperado'}. Verifique as permissões de saúde nas configurações do Android.` 
+        });
+      }
     } finally {
       setIsSyncing(false);
     }
   };
+
+  // 4. Auto-sincronização silenciosa na inicialização / montagem da tela
+  useEffect(() => {
+    if (!autoSyncRanRef.current) {
+      const cfg = storage.getGoogleHealthConfig();
+      if (cfg.autoSync) {
+        autoSyncRanRef.current = true;
+        console.log('[Health Connect Auto-Sync] Executando sincronização silenciosa em segundo plano...');
+        handleSyncNow(false);
+      }
+    }
+  }, []);
 
   // Connect via Google OAuth Button
   const handleOAuthLogin = async () => {
@@ -828,14 +849,15 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-300">
+              <div className="overflow-x-auto w-full -mx-2 px-2 sm:mx-0 sm:px-0">
+                <table className="min-w-[820px] w-full text-left text-xs text-slate-300">
                   <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
                     <tr>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Data</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Peso</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap text-amber-400">Gordura (BF)</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">IMC</th>
-                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Gordura (BF)</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Classificação</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Passos</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Sono</th>
                       <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Freq. Cardíaca</th>
@@ -863,20 +885,26 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                             {entry.weightKg ? `${entry.weightKg.toFixed(1)} kg` : <span className="text-slate-600 font-mono font-normal">-</span>}
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
-                            {entryIMC ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-slate-200">{entryIMC.value}</span>
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${entryIMC.badgeBg}`}>
-                                  {entryIMC.label}
-                                </span>
-                              </div>
+                            {entry.bodyFatPercent ? (
+                              <span className="font-bold text-amber-300 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md text-xs inline-flex items-center gap-1">
+                                {entry.bodyFatPercent}%
+                              </span>
                             ) : (
                               <span className="text-slate-600 font-mono">-</span>
                             )}
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
-                            {entry.bodyFatPercent ? (
-                              <span className="font-semibold text-amber-300">{entry.bodyFatPercent}%</span>
+                            {entryIMC ? (
+                              <span className="font-semibold text-slate-200">{entryIMC.value}</span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entryIMC ? (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${entryIMC.badgeBg}`}>
+                                {entryIMC.label}
+                              </span>
                             ) : (
                               <span className="text-slate-600 font-mono">-</span>
                             )}
@@ -1095,7 +1123,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
               {googleConfig.connected && (
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={handleSyncNow}
+                    onClick={() => handleSyncNow(true)}
                     disabled={isSyncing}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
                   >
@@ -1328,7 +1356,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
 
                   <button
                     type="button"
-                    onClick={handleSyncNow}
+                    onClick={() => handleSyncNow(true)}
                     disabled={isSyncing}
                     className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >

@@ -38,6 +38,7 @@ export function toLocalDateString(val: any): string {
 
 interface DailyMetricsCollector {
   weightKg?: number;
+  weightTimestamp?: number;
   bodyFatPercent?: number;
   steps?: number;
   sleepHours?: number;
@@ -186,14 +187,16 @@ export const googleFitSync = {
       return item;
     };
 
+    // Raw body fat records for timestamp proximity cross-referencing
+    const rawBodyFatRecords: Array<{ timestamp: number; dateStr: string; fat: number }> = [];
+
     let hasToken = false;
 
     // 1. Processar dados pré-obtidos (objeto completo ou lista de registros)
     if (prefetchedData) {
       hasToken = true;
-      console.log('[Health Connect] Processando dados pré-obtidos:', prefetchedData);
+      console.log('[Health Connect] Processando dados pré-obtidos no syncData:', prefetchedData);
 
-      // Se prefetchedData for um objeto com métricas categorizadas
       const weights = prefetchedData.weights || prefetchedData.records || (Array.isArray(prefetchedData) ? prefetchedData : []);
       const bodyFat = prefetchedData.bodyFat || [];
       const steps = prefetchedData.steps || [];
@@ -201,28 +204,44 @@ export const googleFitSync = {
       const heartRates = prefetchedData.heartRates || [];
       const hydration = prefetchedData.hydration || [];
 
-      // Processar Pesos
+      // Processar Pesagens
       if (Array.isArray(weights)) {
         weights.forEach((rec: any) => {
           const w = rec?.weightKg ?? rec?.weight?.inKilograms ?? rec?.value;
-          const dateStr = toLocalDateString(rec?.time || rec?.startTime || rec?.date);
+          const rawTime = rec?.time || rec?.startTime || rec?.date;
+          const dateStr = toLocalDateString(rawTime);
           if (w && dateStr) {
-            const daily = getOrCreateDaily(dateStr);
-            daily.weightKg = parseFloat(Number(w).toFixed(1));
-            daily.source = 'Health Connect';
+            const wNum = parseFloat(Number(w).toFixed(1));
+            if (wNum > 0) {
+              const daily = getOrCreateDaily(dateStr);
+              daily.weightKg = wNum;
+              daily.weightTimestamp = rawTime ? new Date(rawTime).getTime() : undefined;
+              daily.source = 'Health Connect';
+            }
           }
         });
       }
 
-      // Processar Gordura Corporal
+      // Processar Gordura Corporal (BodyFatRecord)
       if (Array.isArray(bodyFat)) {
         bodyFat.forEach((rec: any) => {
-          const fat = rec?.percentage ?? rec?.value;
-          const dateStr = toLocalDateString(rec?.time || rec?.startTime || rec?.date);
-          if (fat && dateStr) {
-            const daily = getOrCreateDaily(dateStr);
-            daily.bodyFatPercent = parseFloat(Number(fat).toFixed(1));
-            daily.source = 'Health Connect';
+          let fat = Number(rec?.percentage ?? rec?.value ?? rec?.bodyFatPercent ?? rec?.percentage?.value);
+          if (!isNaN(fat) && fat > 0) {
+            // Normalizar escala se vier em fração decimal (ex: 0.22 -> 22.0%)
+            if (fat <= 1.0) {
+              fat = fat * 100;
+            }
+            fat = parseFloat(fat.toFixed(1));
+
+            const rawTime = rec?.time || rec?.startTime || rec?.date;
+            const dateStr = toLocalDateString(rawTime);
+            if (dateStr) {
+              const t = rawTime ? new Date(rawTime).getTime() : 0;
+              rawBodyFatRecords.push({ timestamp: t, dateStr, fat });
+              const daily = getOrCreateDaily(dateStr);
+              daily.bodyFatPercent = fat;
+              daily.source = 'Health Connect';
+            }
           }
         });
       }
@@ -284,7 +303,7 @@ export const googleFitSync = {
     // 2. Se for Capacitor nativo e não veio prefetchedData, consultar diretamente o plugin nativo
     if (Capacitor.isNativePlatform() && (!prefetchedData || (Array.isArray(prefetchedData) && prefetchedData.length === 0))) {
       try {
-        console.log('[Health Connect] Verificando runtime nativo do Health Connect...');
+        console.log('[Health Connect] Consultando runtime nativo do Health Connect...');
         const plugins = (window as any).Capacitor?.Plugins;
         const HealthConnect = plugins?.HealthConnect || plugins?.CapacitorHealthConnect;
 
@@ -306,28 +325,40 @@ export const googleFitSync = {
 
           if (resData) {
             hasToken = true;
-            // Popular métricas a partir da resposta nativa
             const weights = resData.weights || resData.records || [];
             if (Array.isArray(weights)) {
               weights.forEach((rec: any) => {
                 const w = rec?.weightKg ?? rec?.weight?.inKilograms ?? rec?.value;
-                const dateStr = toLocalDateString(rec?.time || rec?.startTime || rec?.date);
+                const rawTime = rec?.time || rec?.startTime || rec?.date;
+                const dateStr = toLocalDateString(rawTime);
                 if (w && dateStr) {
-                  const daily = getOrCreateDaily(dateStr);
-                  daily.weightKg = parseFloat(Number(w).toFixed(1));
-                  daily.source = 'Health Connect';
+                  const wNum = parseFloat(Number(w).toFixed(1));
+                  if (wNum > 0) {
+                    const daily = getOrCreateDaily(dateStr);
+                    daily.weightKg = wNum;
+                    daily.weightTimestamp = rawTime ? new Date(rawTime).getTime() : undefined;
+                    daily.source = 'Health Connect';
+                  }
                 }
               });
             }
 
             if (Array.isArray(resData.bodyFat)) {
               resData.bodyFat.forEach((rec: any) => {
-                const fat = rec?.percentage ?? rec?.value;
-                const dateStr = toLocalDateString(rec?.time || rec?.startTime || rec?.date);
-                if (fat && dateStr) {
-                  const daily = getOrCreateDaily(dateStr);
-                  daily.bodyFatPercent = parseFloat(Number(fat).toFixed(1));
-                  daily.source = 'Health Connect';
+                let fat = Number(rec?.percentage ?? rec?.value ?? rec?.bodyFatPercent ?? rec?.percentage?.value);
+                if (!isNaN(fat) && fat > 0) {
+                  if (fat <= 1.0) fat = fat * 100;
+                  fat = parseFloat(fat.toFixed(1));
+
+                  const rawTime = rec?.time || rec?.startTime || rec?.date;
+                  const dateStr = toLocalDateString(rawTime);
+                  if (dateStr) {
+                    const t = rawTime ? new Date(rawTime).getTime() : 0;
+                    rawBodyFatRecords.push({ timestamp: t, dateStr, fat });
+                    const daily = getOrCreateDaily(dateStr);
+                    daily.bodyFatPercent = fat;
+                    daily.source = 'Health Connect';
+                  }
                 }
               });
             }
@@ -434,7 +465,9 @@ export const googleFitSync = {
                   daily.source = daily.source || 'Google Fit';
                 }
                 if (fatPoint?.value?.[0]?.fpVal && !daily.bodyFatPercent) {
-                  daily.bodyFatPercent = parseFloat(fatPoint.value[0].fpVal.toFixed(1));
+                  let fVal = parseFloat(fatPoint.value[0].fpVal.toFixed(1));
+                  if (fVal <= 1.0) fVal = fVal * 100;
+                  daily.bodyFatPercent = fVal;
                   daily.source = daily.source || 'Google Fit';
                 }
                 if (stepPoint?.value?.[0]?.intVal && !daily.steps) {
@@ -452,16 +485,56 @@ export const googleFitSync = {
       }
     }
 
-    // 4. Sincronização e Merge Inteligente por Data (Group & Merge)
+    // 4. Cruzamento de Proximidade para Gordura Corporal (Body Fat Matching)
+    // Garante que mesmo que o timestamp da balança tenha pequena variação de segundos ou fuso,
+    // a gordura corporal seja atribuída à pesagem correspondente do mesmo dia.
+    dailyMap.forEach((daily, dateStr) => {
+      if (daily.weightKg && !daily.bodyFatPercent && rawBodyFatRecords.length > 0) {
+        // Busca direta pelo mesmo dateStr
+        const exactMatch = rawBodyFatRecords.find(r => r.dateStr === dateStr);
+        if (exactMatch) {
+          daily.bodyFatPercent = exactMatch.fat;
+        } else if (daily.weightTimestamp) {
+          // Busca por proximidade de tempo (até 12 horas da pesagem)
+          const closest = rawBodyFatRecords
+            .map(r => ({ ...r, diff: Math.abs(r.timestamp - daily.weightTimestamp!) }))
+            .filter(r => r.diff <= 12 * 3600 * 1000)
+            .sort((a, b) => a.diff - b.diff)[0];
+
+          if (closest) {
+            daily.bodyFatPercent = closest.fat;
+          }
+        }
+      }
+    });
+
+    // 5. Sincronização e Merge Inteligente por Data (Group & Merge)
+    // REGRA OBRIGATÓRIA: Descartar dias sem pesagem real para não criar linhas vazias.
     const existingByDate = new Map<string, SymptomLog>(existingSymptoms.map(s => [s.date, s]));
     const mergedLogs: SymptomLog[] = [];
     let updatedCount = 0;
     let createdCount = 0;
 
     dailyMap.forEach((data, dateStr) => {
-      // Ignorar se a data não tiver dados reais
-      if (!data.weightKg && !data.bodyFatPercent && !data.steps && !data.sleepHours && !data.heartRateSum && !data.hydrationMl) {
-        return;
+      // Se o dia NÃO tiver peso registrado, NUNCA crie uma nova linha de histórico!
+      if (!data.weightKg || isNaN(data.weightKg) || data.weightKg <= 0) {
+        const existing = existingByDate.get(dateStr);
+        // Se já existir registro manual que possui peso, enriquece suas métricas
+        if (existing && existing.weightKg && existing.weightKg > 0) {
+          const avgBpm = data.heartRateCount ? Math.round(data.heartRateSum! / data.heartRateCount) : undefined;
+          const updatedLog: SymptomLog = {
+            ...existing,
+            bodyFatPercent: data.bodyFatPercent !== undefined ? data.bodyFatPercent : existing.bodyFatPercent,
+            steps: data.steps !== undefined ? data.steps : existing.steps,
+            sleepHours: data.sleepHours !== undefined ? data.sleepHours : existing.sleepHours,
+            heartRateBpm: avgBpm !== undefined ? avgBpm : existing.heartRateBpm,
+            waterMl: data.hydrationMl !== undefined ? data.hydrationMl : existing.waterMl,
+            updatedAt: new Date().toISOString(),
+          };
+          mergedLogs.push(updatedLog);
+          updatedCount++;
+        }
+        return; // Descarte o dia sem peso
       }
 
       const avgBpm = data.heartRateCount ? Math.round(data.heartRateSum! / data.heartRateCount) : undefined;
@@ -483,7 +556,7 @@ export const googleFitSync = {
         mergedLogs.push(updatedLog);
         updatedCount++;
       } else {
-        // Criar novo registro para a data com todos os dados agrupados
+        // Criar novo registro para a data com peso e métricas agrupadas
         const newLog: SymptomLog = {
           id: 'symp_hc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
           date: dateStr,
@@ -531,10 +604,10 @@ export const googleFitSync = {
       newLogs: mergedLogs,
       count: mergedLogs.length,
       message: mergedLogs.length > 0
-        ? `Sincronização concluída! ${mergedLogs.length} dias sincronizados (${createdCount} novos, ${updatedCount} atualizados).`
+        ? `Sincronização concluída! ${mergedLogs.length} dias de pesagem sincronizados (${createdCount} novos, ${updatedCount} atualizados).`
         : (isGoogleSession
-            ? 'Nenhuma nova medição encontrada nos últimos 60 dias no Health Connect ou Google Fit.'
-            : 'Nenhuma medição encontrada.'),
+            ? 'Nenhuma nova pesagem encontrada nos últimos 60 dias no Health Connect ou Google Fit.'
+            : 'Nenhuma pesagem encontrada.'),
       lastSyncAt: updatedSyncTime,
       hasOAuthToken: true,
     };
@@ -587,8 +660,8 @@ export const googleFitSync = {
       if (rawFat) {
         const cleanFat = rawFat.replace(/[^\d.,]/g, '').replace(',', '.');
         const parsedFat = parseFloat(cleanFat);
-        if (!isNaN(parsedFat) && parsedFat > 3 && parsedFat < 60) {
-          fatVal = parsedFat;
+        if (!isNaN(parsedFat) && parsedFat > 0 && parsedFat < 60) {
+          fatVal = parsedFat <= 1.0 ? parsedFat * 100 : parsedFat;
         }
       }
 
@@ -623,6 +696,9 @@ export const googleFitSync = {
     const results: SymptomLog[] = [];
 
     for (const entry of entries) {
+      // Apenas adiciona se houver peso
+      if (!entry.weightKg || entry.weightKg <= 0) continue;
+
       const existing = existingMap.get(entry.date);
       if (existing) {
         results.push({

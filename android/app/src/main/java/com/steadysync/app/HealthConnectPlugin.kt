@@ -109,6 +109,8 @@ class HealthConnectPlugin : Plugin() {
                                 val item = JSObject()
                                 item.put("time", rec.time.toString())
                                 item.put("percentage", rec.percentage.value)
+                                item.put("value", rec.percentage.value)
+                                item.put("bodyFatPercent", rec.percentage.value)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -303,6 +305,8 @@ class HealthConnectPlugin : Plugin() {
                 val item = JSObject()
                 item.put("time", rec.time.toString())
                 item.put("percentage", rec.percentage.value)
+                item.put("value", rec.percentage.value)
+                item.put("bodyFatPercent", rec.percentage.value)
                 bodyFatArray.put(item)
             }
         } catch (e: Exception) {

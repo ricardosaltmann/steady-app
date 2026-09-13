@@ -414,6 +414,17 @@ export function App() {
     }
   };
 
+  const handleSaveSymptoms = (newLogs: SymptomLog[]) => {
+    if (!newLogs || newLogs.length === 0) return;
+    const newMap = new Map(newLogs.map(l => [l.id, l]));
+    const updated = [...newLogs, ...symptoms.filter(s => !newMap.has(s.id))];
+    storage.saveSymptoms(updated, currentUser?.id);
+    setSymptoms(updated);
+    if (currentUser?.id) {
+      newLogs.forEach(l => supabaseSync.saveSymptom(l, currentUser.id));
+    }
+  };
+
   const handleDeleteSymptom = (id: string) => {
     const updated = symptoms.filter(s => s.id !== id);
     storage.saveSymptoms(updated, currentUser?.id);
@@ -719,6 +730,7 @@ export function App() {
             <SymptomTracker
               symptoms={symptoms}
               onSaveSymptom={handleSaveSymptom}
+              onSaveSymptoms={handleSaveSymptoms}
               onDeleteSymptom={handleDeleteSymptom}
               profile={profile}
               onSaveProfile={handleSaveProfile}
