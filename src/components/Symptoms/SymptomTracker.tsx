@@ -11,6 +11,7 @@ interface HealthConnectPlugin {
   checkPermissions(): Promise<any>;
   openHealthConnectSettings(): Promise<void>;
   readRecords(options: any): Promise<any>;
+  readAllHealthMetrics(options?: any): Promise<any>;
 }
 
 const HealthConnect = registerPlugin<HealthConnectPlugin>('HealthConnect');
@@ -22,6 +23,7 @@ import {
   Moon, 
   Flame, 
   Droplets, 
+  Footprints,
   Trash2, 
   Gauge, 
   Scale, 
@@ -187,15 +189,25 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     }
   }, []);
 
-  // Filter and sort weight entries
+  // Filter and sort weight and health entries
   const weightEntries = useMemo(() => {
     return symptoms
-      .filter(s => s.weightKg && s.weightKg > 0)
+      .filter(s => 
+        (s.weightKg && s.weightKg > 0) ||
+        (s.bodyFatPercent && s.bodyFatPercent > 0) ||
+        (s.steps && s.steps > 0) ||
+        (s.sleepHours && s.sleepHours > 0) ||
+        (s.heartRateBpm && s.heartRateBpm > 0) ||
+        (s.waterMl && s.waterMl > 0) ||
+        (s.waistCm && s.waistCm > 0)
+      )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [symptoms]);
 
-  const latestWeight = weightEntries[0]?.weightKg || profile?.weightKg || 82.0;
-  const oldestWeight = weightEntries[weightEntries.length - 1]?.weightKg || latestWeight;
+  const latestWeightEntry = weightEntries.find(s => s.weightKg && s.weightKg > 0);
+  const oldestWeightEntry = [...weightEntries].reverse().find(s => s.weightKg && s.weightKg > 0);
+  const latestWeight = latestWeightEntry?.weightKg || profile?.weightKg || 82.0;
+  const oldestWeight = oldestWeightEntry?.weightKg || latestWeight;
   const weightChange = latestWeight - oldestWeight;
   const currentIMC = calculateIMC(latestWeight, currentHeight);
 
@@ -307,19 +319,18 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   };
 
   // Sync Now with connected Google Account / Health Connect
-  // Sync Now with connected Google Account / Health Connect
   const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncFeedback(null);
     try {
-      console.log('[Health Connect] Iniciando fluxo de sincronização...');
+      console.log('[Health Connect] Iniciando fluxo de sincronização completo...');
 
-      // 1. Chamar o método de solicitar permissões nativas (requestPermissions) ANTES de tentar executar o readRecords
+      // 1. Chamar o método de solicitar permissões nativas (requestPermissions) para TODOS os escopos
       if (Capacitor.isNativePlatform()) {
         try {
-          console.log('[Health Connect] Disparando requestPermissions nativo do Capacitor para exibir pop-up...');
+          console.log('[Health Connect] Disparando requestPermissions nativo para Peso, Gordura, Passos, Sono, BPM e Hidratação...');
           const permResult = await HealthConnect.requestPermissions({
-            permissions: ['weight', 'bodyFat', 'height']
+            permissions: ['weight', 'bodyFat', 'height', 'steps', 'sleep', 'heartRate', 'hydration']
           });
           console.log('[Health Connect] Pop-up respondido pelo usuário:', permResult);
         } catch (permErr: any) {
@@ -331,33 +342,40 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       const startTime = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
       const endTime = new Date().toISOString();
 
-      let hcRecords: any[] = [];
+      let hcData: any = null;
       if (Capacitor.isNativePlatform()) {
         try {
-          console.log('[Health Connect] Executando readRecords (janela de 60 dias ISO):', startTime, 'até', endTime);
-          const result = await HealthConnect.readRecords({
-            type: 'Weight',
-            timeRangeFilter: {
-              type: 'between',
-              startTime,
-              endTime,
-            }
-          });
+          console.log('[Health Connect] Executando busca completa (janela de 60 dias ISO):', startTime, 'até', endTime);
+          if (typeof HealthConnect.readAllHealthMetrics === 'function') {
+            hcData = await HealthConnect.readAllHealthMetrics({
+              timeRangeFilter: { type: 'between', startTime, endTime }
+            });
+          } else {
+            hcData = await HealthConnect.readRecords({
+              type: 'All',
+              timeRangeFilter: { type: 'between', startTime, endTime }
+            });
+          }
 
-          // Log visual de debug solicitado pelo usuário
-          const count = result?.records?.length ?? 0;
-          alert("Registros encontrados: " + JSON.stringify(count));
-          console.log('[Health Connect] Resultado de readRecords:', result);
+          const weightCount = hcData?.weights?.length ?? hcData?.records?.length ?? 0;
+          const stepsCount = hcData?.steps?.length ?? 0;
+          const sleepCount = hcData?.sleep?.length ?? 0;
+          const hrCount = hcData?.heartRates?.length ?? 0;
+          const bfCount = hcData?.bodyFat?.length ?? 0;
+          const hydCount = hcData?.hydration?.length ?? 0;
+          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + hydCount;
 
-          hcRecords = result?.records || [];
+          // Alerta visual de debug solicitado pelo usuário mostrando a riqueza de registros
+          alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
+          console.log('[Health Connect] Resultado de leitura completa:', hcData);
         } catch (readErr: any) {
-          console.error('[Health Connect Error] Erro ao executar readRecords:', readErr);
-          alert("Erro no readRecords: " + (readErr?.message || JSON.stringify(readErr)));
+          console.error('[Health Connect Error] Erro ao executar leitura:', readErr);
+          alert("Erro no Health Connect: " + (readErr?.message || JSON.stringify(readErr)));
         }
       }
 
-      // 3. Executar a busca / leitura de dados (Health Connect + Google Fit)
-      const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight, undefined, hcRecords);
+      // 3. Executar o agrupamento e merge inteligente por data (Health Connect + Google Fit)
+      const res = await googleFitSync.syncData(symptoms, latestWeight, currentHeight, undefined, hcData);
       if (res.newLogs.length > 0) {
         res.newLogs.forEach(log => onSaveSymptom(log));
       }
@@ -812,20 +830,25 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                  <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 text-[11px] uppercase tracking-wider">
                     <tr>
-                      <th className="py-2.5 px-3 font-semibold">Data</th>
-                      <th className="py-2.5 px-3 font-semibold">Peso (kg)</th>
-                      <th className="py-2.5 px-3 font-semibold">IMC</th>
-                      <th className="py-2.5 px-3 font-semibold">Classificação</th>
-                      <th className="py-2.5 px-3 font-semibold">Medidas</th>
-                      <th className="py-2.5 px-3 font-semibold">Origem / Observações</th>
-                      <th className="py-2.5 px-3 text-right">Ações</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Data</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Peso</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">IMC</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Gordura (BF)</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Passos</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Sono</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Freq. Cardíaca</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Hidratação</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Medidas</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Origem</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
                     {weightEntries.map(entry => {
-                      const entryIMC = calculateIMC(entry.weightKg || 0, entry.heightCm || currentHeight);
+                      const entryIMC = entry.weightKg ? calculateIMC(entry.weightKg, entry.heightCm || currentHeight) : null;
+                      const isHealthConnect = entry.notes?.includes('Health Connect');
                       const isGoogleSynced = entry.notes?.includes('Google Fit');
 
                       return (
@@ -836,32 +859,89 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                               <span>{entry.date}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-3 font-bold text-white text-sm">
-                            {entry.weightKg?.toFixed(1)} kg
+                          <td className="py-3 px-3 font-bold text-white text-sm whitespace-nowrap">
+                            {entry.weightKg ? `${entry.weightKg.toFixed(1)} kg` : <span className="text-slate-600 font-mono font-normal">-</span>}
                           </td>
-                          <td className="py-3 px-3 font-semibold text-slate-200">
-                            {entryIMC.value}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entryIMC ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-slate-200">{entryIMC.value}</span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${entryIMC.badgeBg}`}>
+                                  {entryIMC.label}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
                           </td>
-                          <td className="py-3 px-3">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${entryIMC.badgeBg}`}>
-                              {entryIMC.label}
-                            </span>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entry.bodyFatPercent ? (
+                              <span className="font-semibold text-amber-300">{entry.bodyFatPercent}%</span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entry.steps ? (
+                              <span className="font-semibold text-cyan-300 flex items-center gap-1">
+                                <Footprints className="w-3 h-3 text-cyan-400" />
+                                {entry.steps.toLocaleString('pt-BR')}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entry.sleepHours ? (
+                              <span className="font-semibold text-indigo-300 flex items-center gap-1">
+                                <Moon className="w-3 h-3 text-indigo-400" />
+                                {entry.sleepHours.toFixed(1)}h
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entry.heartRateBpm ? (
+                              <span className="font-semibold text-rose-300 flex items-center gap-1">
+                                <Heart className="w-3 h-3 text-rose-400 fill-rose-400/20" />
+                                {entry.heartRateBpm} bpm
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {entry.waterMl ? (
+                              <span className="font-semibold text-blue-300 flex items-center gap-1">
+                                <Droplets className="w-3 h-3 text-blue-400" />
+                                {(entry.waterMl / 1000).toFixed(1)} L
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
                           </td>
                           <td className="py-3 px-3 text-slate-400 whitespace-nowrap">
                             {[
                               entry.waistCm ? `Cintura: ${entry.waistCm}cm` : null,
-                              entry.bodyFatPercent ? `BF: ${entry.bodyFatPercent}%` : null,
                               entry.armCm ? `Braço: ${entry.armCm}cm` : null,
-                            ].filter(Boolean).join(' • ') || '--'}
+                            ].filter(Boolean).join(' • ') || <span className="text-slate-600 font-mono">-</span>}
                           </td>
-                          <td className="py-3 px-3 text-slate-400 max-w-xs truncate">
-                            {isGoogleSynced ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {isHealthConnect ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-800/40">
+                                <Smartphone className="w-3 h-3" />
+                                Health Connect
+                              </span>
+                            ) : isGoogleSynced ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
                                 <Smartphone className="w-3 h-3" />
                                 Google Fit
                               </span>
                             ) : (
-                              entry.notes || '--'
+                              <span className="text-slate-400 max-w-[130px] truncate block" title={entry.notes}>
+                                {entry.notes || <span className="text-slate-600 font-mono">-</span>}
+                              </span>
                             )}
                           </td>
                           <td className="py-3 px-3 text-right">

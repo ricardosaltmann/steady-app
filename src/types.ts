@@ -133,6 +133,9 @@ export interface SymptomLog {
   heightCm?: number;
   bodyFatPercent?: number; // % de gordura corporal
   waterMl?: number;        // Ingestão de água acumulada no dia em mL
+  steps?: number;          // Passos acumulados no dia
+  sleepHours?: number;     // Horas de sono registradas (ex: 7.5)
+  heartRateBpm?: number;   // Frequência cardíaca média/repouso (bpm)
   waistCm?: number;        // Cintura (cm)
   hipCm?: number;          // Quadril (cm)
   armCm?: number;          // Braço (cm)
