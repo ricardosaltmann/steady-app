@@ -1,4 +1,4 @@
-import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, GoogleHealthSyncConfig } from '../types';
+import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { auth } from './auth';
 
@@ -559,5 +559,85 @@ export const storage = {
   saveGoogleHealthConfig: (config: GoogleHealthSyncConfig, userId?: string) => {
     const key = getScopedKey('google_health_config', userId);
     localStorage.setItem(key, JSON.stringify(config));
+  },
+
+  // --- Water & Hydration Tracking ---
+  getWaterData: (dateStr?: string, userId?: string): DailyWaterData => {
+    const today = dateStr || new Date().toISOString().slice(0, 10);
+    const key = getScopedKey(`water_${today}`, userId);
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return {
+        date: today,
+        targetMl: 2500,
+        totalMl: 0,
+        entries: [],
+      };
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { date: today, targetMl: 2500, totalMl: 0, entries: [] };
+    }
+  },
+
+  saveWaterData: (data: DailyWaterData, userId?: string) => {
+    const key = getScopedKey(`water_${data.date}`, userId);
+    localStorage.setItem(key, JSON.stringify(data));
+  },
+
+  addWaterLog: (amountMl: number, targetMl: number = 2500, dateStr?: string, userId?: string): DailyWaterData => {
+    const current = storage.getWaterData(dateStr, userId);
+    const nowTime = new Date().toTimeString().slice(0, 5);
+    const newEntry: WaterLogEntry = {
+      id: `water_${Date.now()}`,
+      time: nowTime,
+      amountMl,
+    };
+    const updated: DailyWaterData = {
+      ...current,
+      targetMl: targetMl || current.targetMl,
+      totalMl: current.totalMl + amountMl,
+      entries: [newEntry, ...current.entries],
+    };
+    storage.saveWaterData(updated, userId);
+    return updated;
+  },
+
+  deleteWaterLog: (entryId: string, dateStr?: string, userId?: string): DailyWaterData => {
+    const current = storage.getWaterData(dateStr, userId);
+    const target = current.entries.find(e => e.id === entryId);
+    const subtracted = target ? target.amountMl : 0;
+    const updated: DailyWaterData = {
+      ...current,
+      totalMl: Math.max(0, current.totalMl - subtracted),
+      entries: current.entries.filter(e => e.id !== entryId),
+    };
+    storage.saveWaterData(updated, userId);
+    return updated;
+  },
+
+  // --- Notification Settings ---
+  getNotificationSettings: (userId?: string): NotificationSettings => {
+    const key = getScopedKey('notification_settings', userId);
+    const raw = localStorage.getItem(key);
+    const defaults: NotificationSettings = {
+      medicationReminders: true,
+      medicationTime: '08:00',
+      waterReminders: true,
+      waterIntervalHours: 2,
+      soundEnabled: true,
+    };
+    if (!raw) return defaults;
+    try {
+      return { ...defaults, ...JSON.parse(raw) };
+    } catch {
+      return defaults;
+    }
+  },
+
+  saveNotificationSettings: (settings: NotificationSettings, userId?: string) => {
+    const key = getScopedKey('notification_settings', userId);
+    localStorage.setItem(key, JSON.stringify(settings));
   },
 };

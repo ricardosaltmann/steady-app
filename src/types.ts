@@ -180,4 +180,27 @@ export interface GoogleHealthSyncConfig {
   autoSync: boolean;
 }
 
+export interface WaterLogEntry {
+  id: string;
+  time: string; // HH:mm
+  amountMl: number;
+}
+
+export interface DailyWaterData {
+  date: string; // YYYY-MM-DD
+  targetMl: number;
+  totalMl: number;
+  entries: WaterLogEntry[];
+}
+
+export interface NotificationSettings {
+  medicationReminders: boolean;
+  medicationTime: string; // '08:00'
+  waterReminders: boolean;
+  waterIntervalHours: number; // e.g. 2 hours
+  soundEnabled: boolean;
+  lastWaterReminderTimestamp?: number;
+  lastMedReminderDate?: string;
+}
+
 

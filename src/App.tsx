@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { storage } from './lib/storage';
 import { auth } from './lib/auth';
 import { supabaseSync } from './lib/supabaseSync';
-import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount } from './types';
+import { notificationsService, isProtocolDueToday } from './lib/notifications';
+import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, DailyWaterData, NotificationSettings } from './types';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { Header } from './components/Navigation/Header';
 import { BottomNav, NavTab } from './components/Navigation/BottomNav';
@@ -16,6 +17,9 @@ import { SymptomTracker } from './components/Symptoms/SymptomTracker';
 import { SettingsModal } from './components/Settings/SettingsModal';
 import { PeptideDilutionCalculator } from './components/Calculator/PeptideDilutionCalculator';
 import { AdminPanel } from './components/Admin/AdminPanel';
+import { WaterCard } from './components/Water/WaterCard';
+import { WaterModal } from './components/Water/WaterModal';
+import { NotificationModal } from './components/Notifications/NotificationModal';
 import { Syringe, Sparkles, ChevronRight, Activity, Calendar, Heart } from 'lucide-react';
 
 export function App() {
@@ -28,12 +32,16 @@ export function App() {
   const [labs, setLabs] = useState<LabResult[]>([]);
   const [symptoms, setSymptoms] = useState<SymptomLog[]>([]);
   const [profile, setProfile] = useState<UserProfile>({ name: '', gender: 'male' });
+  const [waterData, setWaterData] = useState<DailyWaterData>(() => storage.getWaterData());
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() => storage.getNotificationSettings());
 
   const [currentTab, setCurrentTab] = useState<NavTab>('chart');
   const [isInjectionModalOpen, setIsInjectionModalOpen] = useState(false);
   const [quickLogProtocol, setQuickLogProtocol] = useState<Protocol | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   // Load data for active user
   const loadAllData = (targetUserId?: string) => {
@@ -48,6 +56,8 @@ export function App() {
     const loadedSymptoms = storage.getSymptoms(uid);
     const loadedProfile = storage.getProfile(uid);
     const activeId = storage.getActiveCompoundId(uid);
+    const loadedWater = storage.getWaterData(undefined, uid);
+    const loadedNotifications = storage.getNotificationSettings(uid);
 
     setCompounds(loadedCompounds);
     setInjections(loadedInjections);
@@ -55,6 +65,8 @@ export function App() {
     setLabs(loadedLabs);
     setSymptoms(loadedSymptoms);
     setProfile(loadedProfile);
+    setWaterData(loadedWater);
+    setNotificationSettings(loadedNotifications);
     
     // Ensure selectedCompoundId exists and is an enabled compound
     const activeComp = loadedCompounds.find(c => c.id === activeId && c.enabled !== false);
@@ -105,6 +117,57 @@ export function App() {
       loadAllData(currentUser.id);
     }
   }, [currentUser?.id]);
+
+  // Periodic background check for due medications & water reminders
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const checkReminders = () => {
+      const now = new Date();
+      const currentHourMinute = now.toTimeString().slice(0, 5);
+      const todayStr = now.toISOString().slice(0, 10);
+
+      // 1. Medication reminder check
+      if (notificationSettings.medicationReminders) {
+        const activeProtos = protocols.filter(p => p.active);
+        const due = activeProtos.filter(p => isProtocolDueToday(p));
+
+        if (due.length > 0 && notificationSettings.lastMedReminderDate !== todayStr) {
+          if (currentHourMinute >= (notificationSettings.medicationTime || '08:00')) {
+            const first = due[0];
+            const comp = compounds.find(c => c.id === first.compoundId);
+            notificationsService.sendMedicationReminder(
+              first.name,
+              `${first.dose} ${comp?.unit || 'mg'}`,
+              notificationSettings.soundEnabled
+            );
+            const updated = { ...notificationSettings, lastMedReminderDate: todayStr };
+            setNotificationSettings(updated);
+            storage.saveNotificationSettings(updated, currentUser.id);
+          }
+        }
+      }
+
+      // 2. Water reminder check
+      if (notificationSettings.waterReminders) {
+        const lastTimestamp = notificationSettings.lastWaterReminderTimestamp || 0;
+        const intervalMs = (notificationSettings.waterIntervalHours || 2) * 3600000;
+        if (Date.now() - lastTimestamp >= intervalMs) {
+          const remaining = Math.max(0, (waterData.targetMl || 2500) - waterData.totalMl);
+          if (remaining > 0) {
+            notificationsService.sendWaterReminder(remaining, notificationSettings.soundEnabled);
+          }
+          const updated = { ...notificationSettings, lastWaterReminderTimestamp: Date.now() };
+          setNotificationSettings(updated);
+          storage.saveNotificationSettings(updated, currentUser.id);
+        }
+      }
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 60000);
+    return () => clearInterval(interval);
+  }, [currentUser, protocols, compounds, waterData, notificationSettings]);
 
   const handleSelectCompound = (id: string) => {
     setSelectedCompoundId(id);
@@ -221,6 +284,28 @@ export function App() {
     }
   };
 
+  // Water Handlers
+  const handleAddWater = (amountMl: number, targetMl?: number) => {
+    const updated = storage.addWaterLog(amountMl, targetMl, undefined, currentUser?.id);
+    setWaterData(updated);
+  };
+
+  const handleDeleteWaterEntry = (id: string) => {
+    const updated = storage.deleteWaterLog(id, undefined, currentUser?.id);
+    setWaterData(updated);
+  };
+
+  const handleUpdateWaterTarget = (targetMl: number) => {
+    const updated = { ...waterData, targetMl };
+    storage.saveWaterData(updated, currentUser?.id);
+    setWaterData(updated);
+  };
+
+  const handleUpdateNotificationSettings = (settings: NotificationSettings) => {
+    storage.saveNotificationSettings(settings, currentUser?.id);
+    setNotificationSettings(settings);
+  };
+
   // Profile & Compound Handlers
   const handleSaveProfile = (newProfile: UserProfile) => {
     storage.saveProfile(newProfile, currentUser?.id);
@@ -273,18 +358,17 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Top Header */}
-      {enabledCompounds.length > 0 && (
-        <Header
-          compounds={enabledCompounds}
-          selectedCompoundId={selectedCompoundId}
-          currentUser={currentUser}
-          onLogout={handleLogout}
-          onOpenAdmin={() => setIsAdminPanelOpen(true)}
-          onSelectCompound={handleSelectCompound}
-          onOpenNewInjection={() => setIsInjectionModalOpen(true)}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
-        />
-      )}
+      <Header
+        currentUser={currentUser}
+        todayWaterMl={waterData.totalMl}
+        onLogout={handleLogout}
+        onOpenAdmin={() => setIsAdminPanelOpen(true)}
+        onOpenNewInjection={() => setIsInjectionModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenWaterModal={() => setIsWaterModalOpen(true)}
+        onOpenNotificationsModal={() => setIsNotificationModalOpen(true)}
+        hasDueReminders={protocols.some(p => isProtocolDueToday(p))}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-36 sm:pb-32 space-y-6">
@@ -302,9 +386,15 @@ export function App() {
               onOpenLogDose={() => setIsInjectionModalOpen(true)}
             />
 
-            {/* Quick stats & Rotation Guide */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Quick stats, Water & Rotation Guide */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <BodySiteRotationCard injections={injections} />
+
+              <WaterCard
+                waterData={waterData}
+                onQuickAdd={handleAddWater}
+                onOpenModal={() => setIsWaterModalOpen(true)}
+              />
 
               {/* Protocol status summary card */}
               <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-4">
@@ -498,6 +588,31 @@ export function App() {
           onClose={() => setIsAdminPanelOpen(false)}
           compounds={compounds}
           onAddGlobalCompound={handleAddCustomCompound}
+        />
+      )}
+
+      {/* Water Tracking Modal */}
+      {isWaterModalOpen && (
+        <WaterModal
+          waterData={waterData}
+          notificationSettings={notificationSettings}
+          onAddWater={handleAddWater}
+          onDeleteEntry={handleDeleteWaterEntry}
+          onUpdateTarget={handleUpdateWaterTarget}
+          onUpdateNotificationSettings={handleUpdateNotificationSettings}
+          onClose={() => setIsWaterModalOpen(false)}
+        />
+      )}
+
+      {/* Notifications & Reminders Modal */}
+      {isNotificationModalOpen && (
+        <NotificationModal
+          protocols={protocols}
+          compounds={compounds}
+          settings={notificationSettings}
+          onSaveSettings={handleUpdateNotificationSettings}
+          onQuickLogDose={handleQuickLogFromProtocol}
+          onClose={() => setIsNotificationModalOpen(false)}
         />
       )}
     </div>
