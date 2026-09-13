@@ -522,6 +522,7 @@ export function App() {
           <div className="animate-fadeIn">
             <LabTracker
               labs={labs}
+              gender={profile?.gender || 'male'}
               onSaveLab={handleSaveLab}
               onDeleteLab={handleDeleteLab}
             />

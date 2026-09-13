@@ -153,16 +153,30 @@ export function getInitialDemoData() {
 
   const sampleLabs: LabResult[] = [
     {
+      id: 'lab_0',
+      date: daysAgo(60).slice(0, 10),
+      labName: 'Laboratório Fleury / Dasa',
+      notes: 'Check-up inicial pré-protocolo.',
+      markers: [
+        { markerCode: 'total_t', value: 380, unit: 'ng/dL' },
+        { markerCode: 'free_t', value: 10.5, unit: 'ng/dL' },
+        { markerCode: 'e2', value: 22.0, unit: 'pg/mL' },
+        { markerCode: 'shbg', value: 35, unit: 'nmol/L' },
+        { markerCode: 'hematocrit', value: 43.5, unit: '%' },
+        { markerCode: 'glucose', value: 91, unit: 'mg/dL' },
+      ],
+    },
+    {
       id: 'lab_1',
       date: daysAgo(3).slice(0, 10),
       labName: 'Laboratório Fleury / Dasa',
-      notes: 'Coleta em jejum no vale da aplicação.',
+      notes: 'Coleta de controle no vale estável da aplicação.',
       markers: [
-        { markerCode: 'total_t', value: 785, unit: 'ng/dL' },
-        { markerCode: 'free_t', value: 22.4, unit: 'ng/dL' },
-        { markerCode: 'e2', value: 31.8, unit: 'pg/mL' },
-        { markerCode: 'shbg', value: 28, unit: 'nmol/L' },
-        { markerCode: 'hematocrit', value: 46.2, unit: '%' },
+        { markerCode: 'total_t', value: 920, unit: 'ng/dL' },
+        { markerCode: 'free_t', value: 24.5, unit: 'ng/dL' },
+        { markerCode: 'e2', value: 52.0, unit: 'pg/mL' },
+        { markerCode: 'shbg', value: 27, unit: 'nmol/L' },
+        { markerCode: 'hematocrit', value: 47.1, unit: '%' },
         { markerCode: 'glucose', value: 84, unit: 'mg/dL' },
       ],
     },
