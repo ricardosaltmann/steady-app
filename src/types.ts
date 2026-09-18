@@ -51,10 +51,25 @@ export interface Compound {
   enabled?: boolean;        // Se está ativo para exibição nas listas e seletores diários
 }
 
-export type ClinicalDataSource = 'manual' | 'health_connect' | 'google_fit' | 'csv_import';
+export type ClinicalDataSource = 
+  | 'manual' 
+  | 'health_connect' 
+  | 'google_fit' 
+  | 'import' 
+  | 'csv_import' 
+  | 'device' 
+  | 'derived';
+
+export type HealthDataKind = 
+  | 'measured'       // Medição de sensor / balança / laboratório (ex: peso Health Connect, glicemia)
+  | 'user_reported'  // Informado subjetivamente pelo utilizador (ex: energia, humor, libido, notas)
+  | 'derived'        // Calculado por fórmula matemática direta (ex: IMC, razão T:E2)
+  | 'estimated';     // Projeção modelada (ex: curva de decaimento farmacocinético)
 
 export interface ClinicalMetadata {
   dataSource?: ClinicalDataSource;
+  dataKind?: HealthDataKind;
+  dataOrigin?: string; // Pacote ou ID de origem física (ex: com.withings.wscale2, com.sec.android.app.shealth)
   deletedAt?: string | null;
   syncVersion?: number;
   updatedAt?: string;
@@ -158,6 +173,9 @@ export interface DailyActivitySummary {
   sleepHours?: number;     // Duração total do sono em horas
   heartRateBpm?: number;   // Média diária de batimentos cardíacos
   hydrationMl?: number;    // Hidratação acumulada em mL
+  dataOrigin?: string;     // Pacote de origem (ex: com.google.android.apps.fitness)
+  dataSource?: ClinicalDataSource;
+  dataKind?: HealthDataKind;
   updatedAt?: string;
 }
 
