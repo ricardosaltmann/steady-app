@@ -324,7 +324,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
           <div className="space-y-1 pt-1 border-t border-slate-800">
             {data.labPoints.map((lab: any, i: number) => (
               <div key={i} className="p-1.5 bg-emerald-950/40 border border-emerald-800/50 rounded-lg text-emerald-200 text-[11px]">
-                Exame Real: <strong className="text-white">{lab.value} {lab.unit}</strong>
+                Exame Observado (Laboratório): <strong className="text-white">{lab.value} {lab.unit}</strong>
               </div>
             ))}
           </div>
@@ -345,12 +345,12 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
             </div>
             <div>
               <span className="text-xs sm:text-sm font-bold text-white tracking-wide block">
-                Curva Farmacocinética & Biomarcadores
+                Projeção Farmacocinética Estimada & Biomarcadores
               </span>
               <span className="text-[10px] sm:text-[11px] text-slate-400">
                 {activeProtocols.length > 0 
-                  ? `${activeProtocols.length} protocolo(s) ativo(s) sincronizado(s)` 
-                  : 'Exibindo composto selecionado'}
+                  ? `${activeProtocols.length} protocolo(s) ativo(s) • Curvas estimadas vs. exames observados` 
+                  : 'Exibindo projeção estimada do composto selecionado'}
               </span>
             </div>
           </div>
@@ -730,12 +730,15 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
               </span>
             )}
             <span className="flex items-center gap-1">
-              <span className="w-3 h-0.5 bg-cyan-400 inline-block" /> Linha sólida: Histórico
+              <span className="w-3 h-0.5 bg-cyan-400 inline-block" /> Linha sólida: Exposição estimada
             </span>
             <span className="flex items-center gap-1 text-purple-300">
-              <span className="w-3 border-b-2 border-dashed border-purple-400 inline-block" /> Tracejada: Projeção
+              <span className="w-3 border-b-2 border-dashed border-purple-400 inline-block" /> Tracejada: Projeção estimada
             </span>
           </div>
+        </div>
+        <div className="text-[10px] text-slate-500/80 italic text-right">
+          * As curvas refletem modelagem matemática de exposição estimada e não substituem dosagens séricas laboratoriais.
         </div>
       </div>
     </div>
