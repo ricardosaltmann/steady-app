@@ -80,3 +80,12 @@ export function getSafeTimestamp(input?: Date | string | number | null): number 
   const t = d.getTime();
   return isNaN(t) ? 0 : t;
 }
+
+/**
+ * Convenience alias for getLocalDateKey to convert ISO/timestamps to local YYYY-MM-DD.
+ */
+export function toLocalDateString(val: any): string {
+  if (!val) return '';
+  return getLocalDateKey(val);
+}
+
