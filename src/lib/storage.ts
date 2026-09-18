@@ -2,6 +2,9 @@ import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog,
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { getLocalDateKey } from './dateUtils';
 import { auth } from './auth';
+import { localRepository } from './localRepository';
+
+export { localRepository };
 
 // Helper to scope storage keys per authenticated user
 export const getScopedKey = (base: string, userId?: string): string => {
@@ -367,6 +370,9 @@ export const storage = {
     const withTs = (injections || []).map(i => ({
       ...i,
       updatedAt: i.updatedAt || new Date().toISOString(),
+      syncVersion: i.syncVersion || 1,
+      deletedAt: i.deletedAt || null,
+      dataSource: i.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -443,6 +449,9 @@ export const storage = {
     const withTs = filtered.map(p => ({
       ...p,
       updatedAt: p.updatedAt || new Date().toISOString(),
+      syncVersion: p.syncVersion || 1,
+      deletedAt: null,
+      dataSource: p.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -471,6 +480,9 @@ export const storage = {
     const withTs = (labs || []).map(l => ({
       ...l,
       updatedAt: l.updatedAt || new Date().toISOString(),
+      syncVersion: l.syncVersion || 1,
+      deletedAt: l.deletedAt || null,
+      dataSource: l.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -499,6 +511,9 @@ export const storage = {
     const withTs = (symptoms || []).map(s => ({
       ...s,
       updatedAt: s.updatedAt || new Date().toISOString(),
+      syncVersion: s.syncVersion || 1,
+      deletedAt: s.deletedAt || null,
+      dataSource: s.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },

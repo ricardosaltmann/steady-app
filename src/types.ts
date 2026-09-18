@@ -51,7 +51,16 @@ export interface Compound {
   enabled?: boolean;        // Se está ativo para exibição nas listas e seletores diários
 }
 
-export interface Injection {
+export type ClinicalDataSource = 'manual' | 'health_connect' | 'google_fit' | 'csv_import';
+
+export interface ClinicalMetadata {
+  dataSource?: ClinicalDataSource;
+  deletedAt?: string | null;
+  syncVersion?: number;
+  updatedAt?: string;
+}
+
+export interface Injection extends ClinicalMetadata {
   id: string;
   compoundId: string;
   date: string;            // ISO timestamp (YYYY-MM-DDTHH:mm)
@@ -62,7 +71,6 @@ export interface Injection {
   notes?: string;
   needleInfo?: string;     // e.g. 30G 1/2", 27G 1/2", 25G 1"
   protocolId?: string;     // Protocolo vinculado
-  updatedAt?: string;      // ISO timestamp para merge seguro de dados
 }
 
 export type ProtocolFrequency = 
@@ -74,7 +82,7 @@ export type ProtocolFrequency =
   | 'biweekly'         // A cada 2 semanas (Quinzenal)
   | 'monthly';
 
-export interface Protocol {
+export interface Protocol extends ClinicalMetadata {
   id: string;
   name: string;
   compoundId: string;
@@ -91,7 +99,6 @@ export interface Protocol {
   waterMl?: number;           // Água bacteriostática adicionada (ex: 2.6mL)
   concentrationMgMl?: number; // Concentração resultante em mg/mL (ex: 7.69)
   syringeUnits?: number;      // Unidades na seringa U-100 (ex: 32.5 UI)
-  updatedAt?: string;         // ISO timestamp para merge seguro de dados
 }
 
 export interface LabMarker {
@@ -104,7 +111,7 @@ export interface LabMarker {
   femaleRef?: { min: number; max: number };
 }
 
-export interface LabResult {
+export interface LabResult extends ClinicalMetadata {
   id: string;
   date: string;          // YYYY-MM-DD
   markers: {
@@ -115,10 +122,9 @@ export interface LabResult {
   }[];
   labName?: string;
   notes?: string;
-  updatedAt?: string;    // ISO timestamp para merge seguro de dados
 }
 
-export interface SymptomLog {
+export interface SymptomLog extends ClinicalMetadata {
   id: string;
   date: string;          // YYYY-MM-DD
   energy?: number;        // 1 - 5 (opcional: ausente se for registro puramente biométrico)
@@ -143,7 +149,6 @@ export interface SymptomLog {
   thighCm?: number;        // Coxa (cm)
   chestCm?: number;        // Peitoral / Tórax (cm)
   notes?: string;
-  updatedAt?: string;      // ISO timestamp para merge seguro de dados
 }
 
 // Loja Secundária: Séries Temporais / Alta Frequência (Armazenamento em segundo plano)
