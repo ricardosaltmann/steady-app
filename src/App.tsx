@@ -4,6 +4,8 @@ import { storage } from './lib/storage';
 import { auth } from './lib/auth';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { supabaseSync } from './lib/supabaseSync';
+import { syncOutbox } from './lib/syncOutbox';
+import { syncEngine } from './lib/syncEngine';
 import { mergeCollections } from './lib/syncMerge';
 import { notificationsService, isProtocolDueToday } from './lib/notifications';
 import { formatCompoundDose } from './lib/doseFormatter';
@@ -170,94 +172,16 @@ export function App() {
       }
     }
 
-    // 2. Safe Background Cloud Sync from Supabase with Merge Logic
+    // 2. Resilient Background Cloud Sync via SyncEngine (Pull + Two-Way Merge + Outbox Push)
     if (!uid.startsWith('user_demo')) {
-      supabaseSync.getInjections(uid).then(cloudInjs => {
-        if (cloudInjs && cloudInjs.length > 0) {
-          const currentLocal = storage.getInjections(uid);
-          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudInjs);
-          setInjections(merged);
-          storage.saveInjections(merged, uid);
-          itemsToPushToCloud.forEach(inj => supabaseSync.saveInjection(inj, uid));
-        }
-      });
-
-      supabaseSync.getProtocols(uid).then(cloudProtos => {
-        if (cloudProtos && cloudProtos.length > 0) {
-          const deletedIds = storage.getDeletedProtocolIds(uid);
-
-          // Purgar do Supabase qualquer item retornado que o usuário já tenha excluído
-          const resurrectedInCloud = cloudProtos.filter(p => deletedIds.has(p.id));
-          resurrectedInCloud.forEach(p => {
-            console.log('[Supabase Sync] Purgando protocolo previamente excluído pelo usuário:', p.id);
-            supabaseSync.deleteProtocol(p.id, uid);
-          });
-
-          // Filtra apenas protocolos válidos (não excluídos)
-          const validCloudProtos = cloudProtos.filter(p => !deletedIds.has(p.id));
-          const currentLocal = storage.getProtocols(uid).filter(p => !deletedIds.has(p.id));
-          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, validCloudProtos);
-          const finalMerged = merged.filter(p => !deletedIds.has(p.id));
-
-          setProtocols(finalMerged);
-          storage.saveProtocols(finalMerged, uid);
-          itemsToPushToCloud
-            .filter(p => !deletedIds.has(p.id))
-            .forEach(p => supabaseSync.saveProtocol(p, uid));
-        }
-      });
-
-      supabaseSync.getLabs(uid).then(cloudLabs => {
-        if (cloudLabs && cloudLabs.length > 0) {
-          const currentLocal = storage.getLabs(uid);
-          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudLabs);
-          setLabs(merged);
-          storage.saveLabs(merged, uid);
-          itemsToPushToCloud.forEach(l => supabaseSync.saveLab(l, uid));
-        }
-      });
-
-      supabaseSync.getSymptoms(uid).then(cloudSymptoms => {
-        if (cloudSymptoms && cloudSymptoms.length > 0) {
-          const currentLocal = storage.getSymptoms(uid);
-          const { merged, itemsToPushToCloud } = mergeCollections(currentLocal, cloudSymptoms);
-          setSymptoms(merged);
-          storage.saveSymptoms(merged, uid);
-          itemsToPushToCloud.forEach(s => supabaseSync.saveSymptom(s, uid));
-        }
-      });
-
-      // Profile sync from Supabase
-      supabaseSync.getProfile(uid).then(cloudProfile => {
-        if (cloudProfile) {
-          const currentLocal = storage.getProfile(uid);
-          const mergedProfile: UserProfile = {
-            ...currentLocal,
-            ...cloudProfile,
-          };
-          setProfile(mergedProfile);
-          storage.saveProfile(mergedProfile, uid);
-        }
-      });
-
-      // Today's water sync from Supabase
-      const today = getLocalDateKey();
-      supabaseSync.getWaterData(today, uid).then(cloudWater => {
-        if (cloudWater && cloudWater.entries.length > 0) {
-          const localWater = storage.getWaterData(today, uid);
-          const existingIds = new Set(localWater.entries.map(e => e.id));
-          const newFromCloud = cloudWater.entries.filter(e => !existingIds.has(e.id));
-          if (newFromCloud.length > 0) {
-            const mergedEntries = [...localWater.entries, ...newFromCloud];
-            const totalMl = mergedEntries.reduce((acc, curr) => acc + curr.amountMl, 0);
-            const merged: DailyWaterData = {
-              ...localWater,
-              totalMl,
-              entries: mergedEntries,
-            };
-            setWaterData(merged);
-            storage.saveWaterData(merged, uid);
-          }
+      syncEngine.pullAll(uid).then(result => {
+        if (result) {
+          setInjections(result.injections);
+          setProtocols(result.protocols);
+          setLabs(result.labs);
+          setSymptoms(result.symptoms);
+          if (result.profile) setProfile(result.profile);
+          if (result.water) setWaterData(result.water);
         }
       });
     }
@@ -266,7 +190,11 @@ export function App() {
   useEffect(() => {
     if (currentUser) {
       loadAllData(currentUser.id);
+      syncEngine.init(currentUser.id);
     }
+    return () => {
+      syncEngine.stop();
+    };
   }, [currentUser?.id]);
 
   // Periodic background check for due medications & water reminders
@@ -329,6 +257,7 @@ export function App() {
   };
 
   const handleLogout = () => {
+    syncEngine.stop();
     auth.signOut();
     setCurrentUser(null);
   };
@@ -336,6 +265,7 @@ export function App() {
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
     loadAllData(user.id);
+    syncEngine.init(user.id);
   };
 
   // Injection Handlers
@@ -343,7 +273,8 @@ export function App() {
     const updated = storage.addInjection(newInj, currentUser?.id);
     setInjections(updated);
     if (currentUser?.id) {
-      supabaseSync.saveInjection(newInj, currentUser.id);
+      syncOutbox.enqueue('injection', 'upsert', newInj.id, newInj, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -351,7 +282,8 @@ export function App() {
     const updated = storage.deleteInjection(id, currentUser?.id);
     setInjections(updated);
     if (currentUser?.id) {
-      supabaseSync.deleteInjection(id, currentUser.id);
+      syncOutbox.enqueue('injection', 'delete', id, undefined, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -370,30 +302,25 @@ export function App() {
     storage.saveProtocols(current, currentUser?.id);
     setProtocols(current);
     if (currentUser?.id) {
-      supabaseSync.saveProtocol(protocol, currentUser.id);
+      syncOutbox.enqueue('protocol', 'upsert', protocol.id, protocol, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
   const handleDeleteProtocol = async (id: string): Promise<boolean> => {
-    const protocolToDelete = protocols.find(p => p.id === id);
-    const protocolName = protocolToDelete?.name || 'Protocolo';
-
-    // 1. Exclusão Definitiva no Supabase ANTES de atualizar o estado visual
-    if (currentUser?.id && !currentUser.id.startsWith('user_demo') && isSupabaseConfigured()) {
-      const res = await supabaseSync.deleteProtocol(id, currentUser.id);
-      if (!res.success) {
-        alert(`Erro ao excluir o protocolo "${protocolName}" no banco de dados: ${res.error || 'Erro desconhecido'}.\n\nO item NÃO foi removido da tela.`);
-        return false;
-      }
-    }
-
-    // 2. Registrar o ID nos itens excluídos para blindar contra qualquer re-importação futura
+    // 1. Registrar o ID nos itens excluídos para blindar contra qualquer re-importação futura (Tombstone)
     storage.addDeletedProtocolId(id, currentUser?.id);
 
-    // 3. Atualizar imediatamente o estado visual e o storage local após o sucesso
+    // 2. Atualizar imediatamente o estado visual e o storage local
     const updated = protocols.filter(p => p.id !== id);
     storage.saveProtocols(updated, currentUser?.id);
     setProtocols(updated);
+
+    // 3. Enfileirar deleção transacional na Outbox para replicação offline-first no Supabase
+    if (currentUser?.id) {
+      syncOutbox.enqueue('protocol', 'delete', id, undefined, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
+    }
     return true;
   };
 
@@ -405,7 +332,8 @@ export function App() {
     setProtocols(updated);
     const target = updated.find(p => p.id === id);
     if (target && currentUser?.id) {
-      supabaseSync.saveProtocol(target, currentUser.id);
+      syncOutbox.enqueue('protocol', 'upsert', target.id, target, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -417,11 +345,12 @@ export function App() {
 
   // Lab Handlers
   const handleSaveLab = (lab: LabResult) => {
-    const updated = [lab, ...labs];
+    const updated = [lab, ...labs.filter(l => l.id !== lab.id)];
     storage.saveLabs(updated, currentUser?.id);
     setLabs(updated);
     if (currentUser?.id) {
-      supabaseSync.saveLab(lab, currentUser.id);
+      syncOutbox.enqueue('lab', 'upsert', lab.id, lab, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -430,7 +359,8 @@ export function App() {
     storage.saveLabs(updated, currentUser?.id);
     setLabs(updated);
     if (currentUser?.id) {
-      supabaseSync.deleteLab(id, currentUser.id);
+      syncOutbox.enqueue('lab', 'delete', id, undefined, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -445,7 +375,8 @@ export function App() {
     storage.saveSymptoms(updated, currentUser?.id);
     setSymptoms(updated);
     if (currentUser?.id) {
-      supabaseSync.saveSymptom(enrichedLog, currentUser.id);
+      syncOutbox.enqueue('symptom', 'upsert', enrichedLog.id, enrichedLog, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -456,7 +387,8 @@ export function App() {
     storage.saveSymptoms(updated, currentUser?.id);
     setSymptoms(updated);
     if (currentUser?.id) {
-      newLogs.forEach(l => supabaseSync.saveSymptom(l, currentUser.id));
+      newLogs.forEach(l => syncOutbox.enqueue('symptom', 'upsert', l.id, l, currentUser.id));
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -465,7 +397,8 @@ export function App() {
     storage.saveSymptoms(updated, currentUser?.id);
     setSymptoms(updated);
     if (currentUser?.id) {
-      supabaseSync.deleteSymptom(id, currentUser.id);
+      syncOutbox.enqueue('symptom', 'delete', id, undefined, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -473,8 +406,9 @@ export function App() {
   const handleAddWater = (amountMl: number, targetMl?: number) => {
     const updated = storage.addWaterLog(amountMl, targetMl, undefined, currentUser?.id);
     setWaterData(updated);
-    if (currentUser?.id && updated.entries[0]) {
-      supabaseSync.saveWaterEntry(updated.entries[0], updated.date, updated.targetMl, currentUser.id);
+    if (currentUser?.id) {
+      syncOutbox.enqueue('water', 'upsert', updated.date, updated, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -482,7 +416,8 @@ export function App() {
     const updated = storage.deleteWaterLog(id, undefined, currentUser?.id);
     setWaterData(updated);
     if (currentUser?.id) {
-      supabaseSync.deleteWaterEntry(id, currentUser.id);
+      syncOutbox.enqueue('water', 'upsert', updated.date, updated, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 
@@ -490,6 +425,10 @@ export function App() {
     const updated = { ...waterData, targetMl };
     storage.saveWaterData(updated, currentUser?.id);
     setWaterData(updated);
+    if (currentUser?.id) {
+      syncOutbox.enqueue('water', 'upsert', updated.date, updated, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
+    }
   };
 
   const handleUpdateNotificationSettings = (settings: NotificationSettings) => {
@@ -520,7 +459,8 @@ export function App() {
       if (updated) {
         setCurrentUser(updated);
       }
-      supabaseSync.saveProfile(newProfile, currentUser.id);
+      syncOutbox.enqueue('profile', 'upsert', currentUser.id, newProfile, currentUser.id);
+      syncEngine.processOutbox(currentUser.id);
     }
   };
 

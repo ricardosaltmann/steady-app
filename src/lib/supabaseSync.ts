@@ -30,6 +30,7 @@ export const supabaseSync = {
         notes: row.notes,
         needleInfo: row.needle_info,
         protocolId: row.protocol_id,
+        updatedAt: row.updated_at,
       }));
     } catch (e) {
       console.warn('Falha na requisição Supabase:', e);
@@ -53,6 +54,7 @@ export const supabaseSync = {
         notes: injection.notes || null,
         needle_info: injection.needleInfo || null,
         protocol_id: injection.protocolId || null,
+        updated_at: injection.updatedAt || new Date().toISOString(),
       });
 
       return !error;
@@ -95,6 +97,7 @@ export const supabaseSync = {
         name: row.name,
         compoundId: row.compound_id,
         dose: Number(row.dose),
+        unit: row.unit || 'mg',
         route: row.route || 'IM',
         frequency: row.frequency || 'weekly',
         intervalDays: row.interval_days ? Number(row.interval_days) : undefined,
@@ -102,6 +105,11 @@ export const supabaseSync = {
         startDate: row.start_date || getLocalDateKey(),
         active: Boolean(row.active),
         notes: row.notes,
+        vialMg: row.vial_mg ? Number(row.vial_mg) : undefined,
+        waterMl: row.water_ml ? Number(row.water_ml) : undefined,
+        concentrationMgMl: row.concentration_mg_ml ? Number(row.concentration_mg_ml) : undefined,
+        syringeUnits: row.syringe_units ? Number(row.syringe_units) : undefined,
+        updatedAt: row.updated_at,
       }));
     } catch {
       return null;
@@ -118,6 +126,7 @@ export const supabaseSync = {
         name: protocol.name,
         compound_id: protocol.compoundId,
         dose: protocol.dose,
+        unit: protocol.unit || 'mg',
         route: protocol.route,
         frequency: protocol.frequency,
         interval_days: protocol.intervalDays || null,
@@ -125,6 +134,11 @@ export const supabaseSync = {
         start_date: protocol.startDate,
         active: protocol.active,
         notes: protocol.notes || null,
+        vial_mg: protocol.vialMg || null,
+        water_ml: protocol.waterMl || null,
+        concentration_mg_ml: protocol.concentrationMgMl || null,
+        syringe_units: protocol.syringeUnits || null,
+        updated_at: protocol.updatedAt || new Date().toISOString(),
       });
 
       return !error;
@@ -175,6 +189,7 @@ export const supabaseSync = {
         labName: row.lab_name,
         notes: row.notes,
         markers: row.markers || [],
+        updatedAt: row.updated_at,
       }));
     } catch {
       return null;
@@ -192,6 +207,7 @@ export const supabaseSync = {
         lab_name: lab.labName || null,
         notes: lab.notes || null,
         markers: lab.markers || [],
+        updated_at: lab.updatedAt || new Date().toISOString(),
       });
 
       return !error;
@@ -249,7 +265,9 @@ export const supabaseSync = {
         armCm: row.arm_cm ? Number(row.arm_cm) : undefined,
         thighCm: row.thigh_cm ? Number(row.thigh_cm) : undefined,
         chestCm: row.chest_cm ? Number(row.chest_cm) : undefined,
+        glucoseMgDl: row.glucose_mg_dl ? Number(row.glucose_mg_dl) : undefined,
         notes: row.notes,
+        updatedAt: row.updated_at,
       }));
     } catch {
       return null;
@@ -275,6 +293,7 @@ export const supabaseSync = {
         weight_kg: symptom.weightKg || null,
         height_cm: symptom.heightCm || null,
         body_fat_percent: symptom.bodyFatPercent || null,
+        glucose_mg_dl: symptom.glucoseMgDl || null,
         water_ml: symptom.waterMl || null,
         waist_cm: symptom.waistCm || null,
         hip_cm: symptom.hipCm || null,
@@ -282,6 +301,7 @@ export const supabaseSync = {
         thigh_cm: symptom.thighCm || null,
         chest_cm: symptom.chestCm || null,
         notes: symptom.notes || null,
+        updated_at: symptom.updatedAt || new Date().toISOString(),
       });
 
       return !error;
@@ -400,6 +420,30 @@ export const supabaseSync = {
       };
     } catch {
       return null;
+    }
+  },
+
+  saveWaterData: async (waterData: DailyWaterData, userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || userId.startsWith('user_demo')) return false;
+
+    try {
+      if (!waterData.entries || waterData.entries.length === 0) {
+        return true;
+      }
+      const rows = waterData.entries.map(e => ({
+        id: e.id,
+        user_id: userId,
+        date: waterData.date,
+        time: e.time,
+        amount_ml: e.amountMl,
+        target_ml: waterData.targetMl,
+        created_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase.from('water_logs').upsert(rows);
+      return !error;
+    } catch {
+      return false;
     }
   },
 

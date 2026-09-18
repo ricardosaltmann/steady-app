@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserAccount } from '../../types';
-import { Settings, Plus, Droplets, Bell, Shield, Activity, LogOut, User } from 'lucide-react';
+import { Settings, Plus, Droplets, Bell, Shield, Activity, LogOut, Cloud, CloudOff, RefreshCw, AlertCircle } from 'lucide-react';
+import { syncEngine, SyncState } from '../../lib/syncEngine';
 
 interface HeaderProps {
   currentUser?: UserAccount | null;
@@ -27,6 +28,17 @@ export const Header: React.FC<HeaderProps> = ({
   hasDueReminders = false,
   isAlarmActive = false,
 }) => {
+  const [syncState, setSyncState] = useState<SyncState>(() => syncEngine.getState());
+
+  useEffect(() => {
+    return syncEngine.subscribe(setSyncState);
+  }, []);
+
+  const handleManualSync = async () => {
+    if (currentUser?.id) {
+      await syncEngine.triggerSync(currentUser.id);
+    }
+  };
   return (
     <header 
       className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-2.5 sm:px-6 pb-2.5 shadow-lg transition-all"
@@ -57,6 +69,50 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Quick Actions, Water, Notifications & User Account */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Cloud Sync Status Indicator */}
+          {currentUser && !currentUser.id.startsWith('user_demo') && (
+            <button
+              onClick={handleManualSync}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer active:scale-95 shrink-0 ${
+                syncState.status === 'syncing'
+                  ? 'bg-amber-950/40 border-amber-800/60 text-amber-300'
+                  : syncState.status === 'offline'
+                  ? 'bg-slate-900 border-slate-800 text-slate-400'
+                  : syncState.status === 'error'
+                  ? 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                  : 'bg-slate-900/60 border-slate-800/60 hover:border-emerald-700/60 text-emerald-400'
+              }`}
+              title={
+                syncState.status === 'syncing'
+                  ? `Sincronizando ${syncState.pendingCount} alterações com o Supabase...`
+                  : syncState.status === 'offline'
+                  ? `Modo offline (${syncState.pendingCount} alterações salvas localmente)`
+                  : syncState.status === 'error'
+                  ? `Erro de sincronização: ${syncState.error || 'Falha de conexão'}. Clique para tentar novamente.`
+                  : 'Nuvem sincronizada. Clique para forçar sincronização.'
+              }
+            >
+              {syncState.status === 'syncing' ? (
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+              ) : syncState.status === 'offline' ? (
+                <CloudOff className="w-3.5 h-3.5 text-slate-400" />
+              ) : syncState.status === 'error' ? (
+                <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+              ) : (
+                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span className="hidden sm:inline text-[10px]">
+                {syncState.status === 'syncing'
+                  ? `Sync (${syncState.pendingCount})`
+                  : syncState.status === 'offline'
+                  ? `Offline (${syncState.pendingCount})`
+                  : syncState.status === 'error'
+                  ? `Erro (${syncState.pendingCount})`
+                  : 'Nuvem'}
+              </span>
+            </button>
+          )}
+
           {/* Quick Water Button */}
           {onOpenWaterModal && (
             <button
