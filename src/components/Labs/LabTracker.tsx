@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LabResult, LabMarker } from '../../types';
 import { DEFAULT_LAB_MARKERS } from '../../lib/defaultCompounds';
 import { evaluateMarkerStatus, getTE2Ratio } from '../../lib/labAnalysis';
+import { getLocalDateKey } from '../../lib/dateUtils';
 import { LabEvolutionChart } from './LabEvolutionChart';
 import { Activity, Plus, Calendar, Trash2, Scale, X, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 
@@ -19,7 +20,7 @@ export const LabTracker: React.FC<LabTrackerProps> = ({
   onDeleteLab,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(getLocalDateKey());
   const [labName, setLabName] = useState('Laboratório Dasa / Fleury');
   const [notes, setNotes] = useState('');
 

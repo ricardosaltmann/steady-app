@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+import { getLocalDateKey } from './dateUtils';
 import { Injection, Protocol, LabResult, SymptomLog, Compound, UserAccount, AdminStats, UserProfile, DailyWaterData, WaterLogEntry } from '../types';
 
 export const supabaseSync = {
@@ -98,7 +99,7 @@ export const supabaseSync = {
         frequency: row.frequency || 'weekly',
         intervalDays: row.interval_days ? Number(row.interval_days) : undefined,
         preferredDaysOfWeek: row.days_of_week || undefined,
-        startDate: row.start_date || new Date().toISOString().slice(0, 10),
+        startDate: row.start_date || getLocalDateKey(),
         active: Boolean(row.active),
         notes: row.notes,
       }));

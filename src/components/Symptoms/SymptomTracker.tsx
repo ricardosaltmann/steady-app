@@ -3,6 +3,7 @@ import { SymptomLog, UserProfile, Injection, GoogleHealthSyncConfig } from '../.
 import { googleFitSync, HealthImportEntry } from '../../lib/googleFitSync';
 import { storage } from '../../lib/storage';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { getLocalDateKey } from '../../lib/dateUtils';
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
 interface HealthConnectPlugin {
@@ -100,7 +101,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const [targetWeightInput, setTargetWeightInput] = useState<string>(profile?.targetWeightKg ? String(profile.targetWeightKg) : '');
 
   // Weight & Body Measurements Form State
-  const [weightDate, setWeightDate] = useState(new Date().toISOString().slice(0, 10));
+  const [weightDate, setWeightDate] = useState(getLocalDateKey());
   const [weightValue, setWeightValue] = useState<string>('82.0');
   const [waistCm, setWaistCm] = useState<string>('');
   const [hipCm, setHipCm] = useState<string>('');
@@ -110,7 +111,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const [weightNotes, setWeightNotes] = useState<string>('');
 
   // Symptoms Form State
-  const [sympDate, setSympDate] = useState(new Date().toISOString().slice(0, 10));
+  const [sympDate, setSympDate] = useState(getLocalDateKey());
   const [energy, setEnergy] = useState<number>(4);
   const [libido, setLibido] = useState<number>(4);
   const [mood, setMood] = useState<number>(4);
@@ -133,7 +134,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [hasOAuthToken, setHasOAuthToken] = useState(false);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
-  const [quickImportDate, setQuickImportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [quickImportDate, setQuickImportDate] = useState(getLocalDateKey());
   const [quickImportWeight, setQuickImportWeight] = useState('');
   const [quickImportFat, setQuickImportFat] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -555,7 +556,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_google_health_export_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `steadysync_google_health_export_${getLocalDateKey()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -586,7 +587,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_dados_saude_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `steadysync_dados_saude_${getLocalDateKey()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

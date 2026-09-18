@@ -7,6 +7,7 @@ import { supabaseSync } from './lib/supabaseSync';
 import { mergeCollections } from './lib/syncMerge';
 import { notificationsService, isProtocolDueToday } from './lib/notifications';
 import { formatCompoundDose } from './lib/doseFormatter';
+import { getLocalDateKey, getLocalTimeKey } from './lib/dateUtils';
 import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, DailyWaterData, NotificationSettings } from './types';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { Header } from './components/Navigation/Header';
@@ -240,7 +241,7 @@ export function App() {
       });
 
       // Today's water sync from Supabase
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getLocalDateKey();
       supabaseSync.getWaterData(today, uid).then(cloudWater => {
         if (cloudWater && cloudWater.entries.length > 0) {
           const localWater = storage.getWaterData(today, uid);
@@ -274,8 +275,8 @@ export function App() {
 
     const checkReminders = () => {
       const now = new Date();
-      const currentHourMinute = now.toTimeString().slice(0, 5);
-      const todayStr = now.toISOString().slice(0, 10);
+      const currentHourMinute = getLocalTimeKey(now);
+      const todayStr = getLocalDateKey(now);
 
       // 1. Medication reminder check
       if (notificationSettings.medicationReminders) {
@@ -435,7 +436,7 @@ export function App() {
 
   // Symptom Handlers
   const handleSaveSymptom = (log: SymptomLog) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateKey();
     const enrichedLog: SymptomLog = {
       ...log,
       waterMl: log.waterMl !== undefined ? log.waterMl : (log.date === today ? waterData.totalMl : undefined),
@@ -561,7 +562,7 @@ export function App() {
   const activeCompound = compounds.find(c => c.id === selectedCompoundId) || enabledCompounds[0] || compounds[0];
   const lastUsedSite = injections[0]?.site;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateKey();
   const pendingDueProtocols = useMemo(() => {
     return protocols.filter(p => {
       if (!p.active || !isProtocolDueToday(p)) return false;
@@ -574,7 +575,7 @@ export function App() {
   }, [protocols, injections, todayStr]);
 
   const hasDueReminders = Boolean(notificationSettings.medicationReminders && pendingDueProtocols.length > 0);
-  const currentHourMinute = new Date().toTimeString().slice(0, 5);
+  const currentHourMinute = getLocalTimeKey();
   const isAlarmActive = Boolean(hasDueReminders && currentHourMinute >= (notificationSettings.medicationTime || '08:00'));
 
   // If user is not authenticated, present AuthScreen

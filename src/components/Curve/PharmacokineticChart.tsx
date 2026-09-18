@@ -12,6 +12,7 @@ import {
 import { Compound, Injection, Protocol, LabResult, SymptomLog } from '../../types';
 import { generateSerumCurve, getDisplayUnit } from '../../lib/pharmacokinetics';
 import { formatCompoundDose } from '../../lib/doseFormatter';
+import { getLocalDateKey } from '../../lib/dateUtils';
 import {
   Activity,
   Calendar,
@@ -199,7 +200,7 @@ export const PharmacokineticChart: React.FC<PharmacokineticChartProps> = ({
 
     return base.map((bp, i) => {
       const d = new Date(bp.timestamp);
-      const yyyyMmDd = d.toISOString().slice(0, 10);
+      const yyyyMmDd = getLocalDateKey(d);
       const pt: any = {
         timestamp: bp.timestamp,
         dateLabel: bp.dateLabel,

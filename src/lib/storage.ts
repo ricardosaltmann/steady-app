@@ -1,5 +1,6 @@
 import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, DailyActivitySummary, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
+import { getLocalDateKey } from './dateUtils';
 import { auth } from './auth';
 
 // Helper to scope storage keys per authenticated user
@@ -589,7 +590,7 @@ export const storage = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_backup_${(user?.name || 'user').toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `steadysync_backup_${(user?.name || 'user').toLowerCase().replace(/\s+/g, '_')}_${getLocalDateKey()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -667,7 +668,7 @@ export const storage = {
 
   // --- Water & Hydration Tracking ---
   getWaterData: (dateStr?: string, userId?: string): DailyWaterData => {
-    const today = dateStr || new Date().toISOString().slice(0, 10);
+    const today = dateStr || getLocalDateKey();
     const key = getScopedKey(`water_${today}`, userId);
     const raw = localStorage.getItem(key);
     if (!raw) {

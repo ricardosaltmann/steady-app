@@ -3,6 +3,7 @@ import { Protocol, Compound, NotificationSettings, Injection } from '../../types
 import { Bell, Syringe, Droplets, Volume2, Check, X, Sparkles, Clock, AlertCircle } from 'lucide-react';
 import { notificationsService, isProtocolDueToday } from '../../lib/notifications';
 import { formatCompoundDose } from '../../lib/doseFormatter';
+import { getLocalDateKey } from '../../lib/dateUtils';
 
 interface NotificationModalProps {
   protocols: Protocol[];
@@ -220,7 +221,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                     <div className="space-y-1.5">
                       {protocolsDueToday.map(p => {
                         const comp = compounds.find(c => c.id === p.compoundId);
-                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const todayStr = getLocalDateKey();
                         const doseTaken = injections.find(inj => 
                           (inj.protocolId === p.id || inj.compoundId === p.compoundId) &&
                           inj.date.startsWith(todayStr)

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserAccount, AdminStats, Compound } from '../../types';
 import { supabaseSync } from '../../lib/supabaseSync';
 import { isSupabaseConfigured } from '../../lib/supabase';
+import { getLocalDateKey } from '../../lib/dateUtils';
 import { 
   Users, Activity, Database, Shield, AlertTriangle, 
   Download, RefreshCw, X, CheckCircle2, Search, Plus, Sparkles, Syringe, HardDrive
@@ -91,7 +92,7 @@ export function AdminPanel({ currentUser, onClose, compounds, onAddGlobalCompoun
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_usuarios_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `steadysync_usuarios_${getLocalDateKey()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
