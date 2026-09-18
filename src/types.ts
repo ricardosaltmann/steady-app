@@ -188,7 +188,6 @@ export interface UserAccount {
   activityLevel?: 'sedentary' | 'moderate' | 'active' | 'athlete';
   marketingConsent?: boolean;
   selectedCategories?: CompoundCategory[];
-  passwordHash?: string;
   createdAt: string;
   therapeuticGoal: 'male_trt' | 'female_hrt' | 'peptides' | 'peptides_glp1' | 'bodybuilding' | 'fertility' | 'other';
   isAdmin?: boolean;

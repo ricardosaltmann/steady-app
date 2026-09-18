@@ -14,7 +14,7 @@ export const isUserAdmin = (dbIsAdmin?: boolean | null, roles?: string[]): boole
 };
 
 // Default pre-seeded demo user so testers can log in with 1 click
-const DEMO_USER: UserAccount = {
+export const DEMO_USER: UserAccount = {
   id: 'user_demo',
   name: 'Usuário Teste / Atleta SteadySync',
   email: 'demo@steadysync.app',
@@ -22,10 +22,9 @@ const DEMO_USER: UserAccount = {
   age: 34,
   gender: 'male',
   selectedCategories: ['steroid', 'peptide', 'fertility'],
-  passwordHash: 'steady123',
   createdAt: new Date().toISOString(),
   therapeuticGoal: 'male_trt',
-  isAdmin: true, // Demo user can also view admin features
+  isAdmin: false, // Modo demo isolado não possui privilégios de produção
 };
 
 export const auth = {
@@ -70,8 +69,14 @@ export const auth = {
   signIn: async (email: string, password: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. If Supabase is active, authenticate via Supabase Auth
-    if (isSupabaseConfigured() && cleanEmail !== DEMO_USER.email) {
+    // 1. Acesso direto ao Modo Demo
+    if (cleanEmail === DEMO_USER.email || cleanEmail === 'demo@steady.app') {
+      const demoUser = auth.signInAsDemo();
+      return { success: true, user: demoUser };
+    }
+
+    // 2. Autenticação oficial e segura via Supabase Auth
+    if (isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
@@ -83,12 +88,14 @@ export const auth = {
         }
 
         if (data.user) {
-          // Fetch profile details
+          // Busca perfil no banco
           const { data: profile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', data.user.id)
             .single();
+
+          const isAdmin = isUserAdmin(profile?.is_admin);
 
           const userAccount: UserAccount = {
             id: data.user.id,
@@ -107,7 +114,7 @@ export const auth = {
             selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories,
             createdAt: data.user.created_at,
             therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
-            isAdmin: isUserAdmin(profile?.is_admin),
+            isAdmin,
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
@@ -119,21 +126,10 @@ export const auth = {
       }
     }
 
-    // 2. Local fallback
-    const users = auth.getUsers();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail || (u.id === DEMO_USER.id && cleanEmail === 'demo@steady.app'));
-
-    if (!user) {
-      return { success: false, error: 'E-mail não encontrado. Crie uma conta ou use a conta Demo.' };
-    }
-
-    if (user.passwordHash !== password) {
-      return { success: false, error: 'Senha incorreta. Verifique os dados digitados.' };
-    }
-
-    localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, user.id);
-    localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(user));
-    return { success: true, user };
+    return { 
+      success: false, 
+      error: 'Serviço de autenticação indisponível offline. Utilize o botão "Experimentar Modo Demo" para testar a aplicação.' 
+    };
   },
 
   signUp: async (
@@ -229,45 +225,20 @@ export const auth = {
       }
     }
 
-    // 2. Local Fallback Signup
-    const users = auth.getUsers();
-    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: 'Este e-mail já está cadastrado.' };
-    }
-
-    const newUser: UserAccount = {
-      id: 'user_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      name: name.trim(),
-      email: cleanEmail,
-      phone: phone?.trim() || undefined,
-      age: age ? Number(age) : undefined,
-      gender,
-      selectedCategories,
-      passwordHash: password,
-      createdAt: new Date().toISOString(),
-      therapeuticGoal,
-      isAdmin: false,
+    return {
+      success: false,
+      error: 'O cadastro de novas contas requer conexão com o servidor. Para experimentar a plataforma sem cadastro, utilize o Modo Demo.'
     };
-
-    users.push(newUser);
-    localStorage.setItem(AUTH_STORAGE_KEYS.USERS, JSON.stringify(users));
-    localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, newUser.id);
-    localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(newUser));
-
-    return { success: true, user: newUser };
   },
 
   signInAsDemo: (): UserAccount => {
-    const users = auth.getUsers();
-    let demo = users.find(u => u.id === DEMO_USER.id);
-    if (!demo) {
-      demo = DEMO_USER;
-      users.unshift(demo);
-      localStorage.setItem(AUTH_STORAGE_KEYS.USERS, JSON.stringify(users));
-    }
-    localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, demo.id);
-    localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(demo));
-    return demo;
+    localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, DEMO_USER.id);
+    localStorage.setItem(AUTH_STORAGE_KEYS.CACHED_USER, JSON.stringify(DEMO_USER));
+    return DEMO_USER;
+  },
+
+  isDemoUser: (userId?: string): boolean => {
+    return userId === DEMO_USER.id || (userId?.startsWith('user_demo') ?? false);
   },
 
   signOut: async (): Promise<void> => {
@@ -345,17 +316,11 @@ export const auth = {
       }
     }
 
-    // Local fallback for offline/demo accounts
-    const users = auth.getUsers();
-    const found = users.find(u => u.email.toLowerCase() === cleanEmail);
-    if (found) {
-      return {
-        success: true,
-        message: `Sua senha cadastrada no aparelho é: "${found.passwordHash || 'steady123'}". Você já pode utilizá-la para entrar.`,
-      };
-    }
-
-    return { success: false, error: 'Nenhum usuário encontrado com este e-mail.', message: '' };
+    return { 
+      success: false, 
+      error: 'Serviço de redefinição de senha indisponível offline. Conecte-se à internet para solicitar a recuperação oficial por e-mail.', 
+      message: '' 
+    };
   },
 
   verifyOtpAndResetPassword: async (
@@ -421,15 +386,7 @@ export const auth = {
       }
     }
 
-    // Local fallback
-    const users = auth.getUsers();
-    const found = users.find(u => u.email.toLowerCase() === cleanEmail);
-    if (found) {
-      const updated = auth.updateProfile(found.id, { passwordHash: newPassword } as any);
-      return { success: true, user: updated || found };
-    }
-
-    return { success: false, error: 'Usuário não encontrado.' };
+    return { success: false, error: 'Validação de código requer conexão com o servidor.' };
   },
 
   updatePassword: async (newPassword: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> => {
@@ -474,14 +431,7 @@ export const auth = {
       }
     }
 
-    // Local fallback
-    const current = auth.getCurrentUser();
-    if (current) {
-      const updated = auth.updateProfile(current.id, { passwordHash: newPassword } as any);
-      return { success: true, user: updated || current };
-    }
-
-    return { success: true };
+    return { success: false, error: 'Redefinição de senha requer conexão com o servidor.' };
   },
 };
 
