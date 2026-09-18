@@ -199,6 +199,21 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [symptoms]);
 
+  // Filter and sort subjective symptom logs - Apenas avaliações genuínas de bem-estar
+  const symptomEntries = useMemo(() => {
+    return symptoms
+      .filter(s => 
+        s.energy !== undefined || 
+        s.libido !== undefined || 
+        s.mood !== undefined || 
+        s.sleep !== undefined || 
+        s.waterRetention !== undefined ||
+        s.bloodPressureSystolic !== undefined ||
+        (s.notes && !s.notes.startsWith('Sincronizado via') && !s.notes.startsWith('Importado de'))
+      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [symptoms]);
+
   const latestWeight = weightEntries[0]?.weightKg || profile?.weightKg || 82.0;
   const oldestWeight = weightEntries[weightEntries.length - 1]?.weightKg || latestWeight;
   const weightChange = latestWeight - oldestWeight;
@@ -224,23 +239,20 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       });
     }
 
+    const existingForDate = symptoms.find(s => s.date === weightDate);
     const newLog: SymptomLog = {
-      id: 'symp_' + Date.now(),
+      id: existingForDate?.id || ('symp_' + Date.now()),
       date: weightDate,
+      ...(existingForDate || {}),
       weightKg: wNum,
       heightCm: hNum || currentHeight,
-      waistCm: waistCm ? parseFloat(waistCm) : undefined,
-      hipCm: hipCm ? parseFloat(hipCm) : undefined,
-      armCm: armCm ? parseFloat(armCm) : undefined,
-      thighCm: thighCm ? parseFloat(thighCm) : undefined,
-      bodyFatPercent: bodyFat ? parseFloat(bodyFat) : undefined,
-      notes: weightNotes.trim() || undefined,
-      energy: 4,
-      libido: 4,
-      mood: 4,
-      sleep: 4,
-      acne: 1,
-      waterRetention: 1,
+      waistCm: waistCm ? parseFloat(waistCm) : existingForDate?.waistCm,
+      hipCm: hipCm ? parseFloat(hipCm) : existingForDate?.hipCm,
+      armCm: armCm ? parseFloat(armCm) : existingForDate?.armCm,
+      thighCm: thighCm ? parseFloat(thighCm) : existingForDate?.thighCm,
+      bodyFatPercent: bodyFat ? parseFloat(bodyFat) : existingForDate?.bodyFatPercent,
+      notes: weightNotes.trim() || existingForDate?.notes || undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     onSaveSymptom(newLog);
@@ -251,18 +263,21 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const handleSaveSymptoms = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const existingForDate = symptoms.find(s => s.date === sympDate);
     const newLog: SymptomLog = {
-      id: 'symp_' + Date.now(),
+      id: existingForDate?.id || ('symp_' + Date.now()),
       date: sympDate,
+      ...(existingForDate || {}),
       energy,
       libido,
       mood,
       sleep,
       acne,
       waterRetention,
-      bloodPressureSystolic: systolic ? parseInt(systolic) : undefined,
-      bloodPressureDiastolic: diastolic ? parseInt(diastolic) : undefined,
-      notes: sympNotes.trim() || undefined,
+      bloodPressureSystolic: systolic ? parseInt(systolic) : existingForDate?.bloodPressureSystolic,
+      bloodPressureDiastolic: diastolic ? parseInt(diastolic) : existingForDate?.bloodPressureDiastolic,
+      notes: sympNotes.trim() || existingForDate?.notes || undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     onSaveSymptom(newLog);
@@ -1025,7 +1040,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             </button>
           </div>
 
-          {symptoms.length === 0 ? (
+          {symptomEntries.length === 0 ? (
             <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-3xl p-6">
               <Smile className="w-12 h-12 text-slate-600 mx-auto mb-3" />
               <p className="text-slate-300 font-medium">Nenhum sintoma registrado ainda</p>
@@ -1035,7 +1050,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {symptoms.map(log => (
+              {symptomEntries.map(log => (
                 <div 
                   key={log.id} 
                   className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-700 transition-colors"
@@ -1058,32 +1073,32 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Flame className="w-3 h-3 text-amber-400" /> Energia
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">{log.energy}/5</span>
+                      <span className="text-xs font-bold text-white mt-0.5">{log.energy !== undefined ? `${log.energy}/5` : '-'}</span>
                     </div>
 
                     <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80 flex flex-col items-center">
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Heart className="w-3 h-3 text-rose-400" /> Libido
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">{log.libido}/5</span>
+                      <span className="text-xs font-bold text-white mt-0.5">{log.libido !== undefined ? `${log.libido}/5` : '-'}</span>
                     </div>
 
                     <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80 flex flex-col items-center">
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Moon className="w-3 h-3 text-indigo-400" /> Sono
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">{log.sleep}/5</span>
+                      <span className="text-xs font-bold text-white mt-0.5">{log.sleep !== undefined ? `${log.sleep}/5` : '-'}</span>
                     </div>
                   </div>
 
-                  {(log.bloodPressureSystolic || log.waterRetention > 2) && (
+                  {(log.bloodPressureSystolic || (log.waterRetention !== undefined && log.waterRetention > 2)) && (
                     <div className="flex items-center gap-3 text-[11px] text-slate-400 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800/60">
                       {log.bloodPressureSystolic && (
                         <span className="text-slate-300 font-medium">
                           PA: {log.bloodPressureSystolic}/{log.bloodPressureDiastolic} mmHg
                         </span>
                       )}
-                      {log.waterRetention > 2 && (
+                      {log.waterRetention !== undefined && log.waterRetention > 2 && (
                         <span className="text-amber-400 flex items-center gap-1">
                           <Droplets className="w-3 h-3" /> Retenção {log.waterRetention}/5
                         </span>

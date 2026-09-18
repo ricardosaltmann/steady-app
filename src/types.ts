@@ -121,12 +121,12 @@ export interface LabResult {
 export interface SymptomLog {
   id: string;
   date: string;          // YYYY-MM-DD
-  energy: number;        // 1 - 5
-  libido: number;        // 1 - 5
-  mood: number;          // 1 - 5
-  sleep: number;         // 1 - 5
-  acne: number;          // 1 - 5
-  waterRetention: number;// 1 - 5
+  energy?: number;        // 1 - 5 (opcional: ausente se for registro puramente biométrico)
+  libido?: number;        // 1 - 5
+  mood?: number;          // 1 - 5
+  sleep?: number;         // 1 - 5
+  acne?: number;          // 1 - 5
+  waterRetention?: number;// 1 - 5
   bloodPressureSystolic?: number;
   bloodPressureDiastolic?: number;
   weightKg?: number;
