@@ -340,7 +340,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
         try {
           console.log('[Health Connect] Disparando requestPermissions nativo...');
           const permResult = await HealthConnect.requestPermissions({
-            permissions: ['weight', 'bodyFat', 'height', 'steps', 'sleep', 'heartRate', 'hydration']
+            permissions: ['weight', 'bodyFat', 'height', 'glucose', 'steps', 'sleep', 'heartRate', 'hydration', 'history']
           });
           console.log('[Health Connect] Pop-up respondido pelo usuário:', permResult);
         } catch (permErr: any) {
@@ -372,12 +372,13 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
           const sleepCount = hcData?.sleep?.length ?? 0;
           const hrCount = hcData?.heartRates?.length ?? 0;
           const bfCount = hcData?.bodyFat?.length ?? 0;
+          const glucoseCount = hcData?.glucose?.length ?? 0;
           const hydCount = hcData?.hydration?.length ?? 0;
-          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + hydCount;
+          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + glucoseCount + hydCount;
 
           // Alerta visual de debug solicitado pelo usuário APENAS no clique manual
           if (isManualClick) {
-            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
+            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Glicose: ${glucoseCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
           }
           console.log('[Health Connect] Resultado de leitura completa:', hcData);
         } catch (readErr: any) {
@@ -887,8 +888,9 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                   <tbody className="divide-y divide-slate-800/60">
                     {weightEntries.map(entry => {
                       const entryIMC = entry.weightKg ? calculateIMC(entry.weightKg, entry.heightCm || currentHeight) : null;
-                      const isHealthConnect = entry.notes?.includes('Health Connect');
-                      const isGoogleSynced = entry.notes?.includes('Google Fit');
+                      const isHealthConnect = entry.dataSource === 'health_connect' || entry.notes?.includes('Health Connect');
+                      const isGoogleSynced = entry.dataSource === 'google_fit' || entry.notes?.includes('Google Fit');
+                      const isCsvImport = entry.dataSource === 'csv_import' || entry.dataSource === 'import' || entry.notes?.includes('Fitbit');
 
                       return (
                         <tr key={entry.id} className="hover:bg-slate-800/30 transition-colors">
@@ -983,14 +985,19 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
                             {isHealthConnect ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-800/40">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-800/40" title={entry.dataOrigin || 'Health Connect Android'}>
                                 <Smartphone className="w-3 h-3" />
-                                Health Connect
+                                {entry.dataOrigin ? (entry.dataOrigin.includes('.') ? entry.dataOrigin.split('.').pop() : entry.dataOrigin) : 'Health Connect'}
                               </span>
                             ) : isGoogleSynced ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
                                 <Smartphone className="w-3 h-3" />
                                 Google Fit
+                              </span>
+                            ) : isCsvImport ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded-md border border-purple-800/40">
+                                <FileSpreadsheet className="w-3 h-3" />
+                                Import CSV
                               </span>
                             ) : (
                               <span className="text-slate-400 max-w-[130px] truncate block" title={entry.notes}>
