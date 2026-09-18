@@ -1,16 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { App as CapApp } from '@capacitor/app';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { storage } from './lib/storage';
-import { auth } from './lib/auth';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
-import { supabaseSync } from './lib/supabaseSync';
 import { syncOutbox } from './lib/syncOutbox';
 import { syncEngine } from './lib/syncEngine';
-import { mergeCollections } from './lib/syncMerge';
-import { notificationsService, isProtocolDueToday } from './lib/notifications';
-import { formatCompoundDose } from './lib/doseFormatter';
+import { auth } from './lib/auth';
 import { getLocalDateKey, getLocalTimeKey } from './lib/dateUtils';
-import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, UserAccount, DailyWaterData, NotificationSettings } from './types';
+import { isProtocolDueToday } from './lib/notifications';
+import { formatCompoundDose } from './lib/doseFormatter';
+import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, DailyWaterData, NotificationSettings, UserAccount } from './types';
+import { useAuth } from './hooks/useAuth';
+import { useReminders } from './hooks/useReminders';
 import { AuthScreen } from './components/Auth/AuthScreen';
 import { Header } from './components/Navigation/Header';
 import { BottomNav, NavTab } from './components/Navigation/BottomNav';
@@ -27,10 +25,10 @@ import { AdminPanel } from './components/Admin/AdminPanel';
 import { WaterCard } from './components/Water/WaterCard';
 import { WaterModal } from './components/Water/WaterModal';
 import { NotificationModal } from './components/Notifications/NotificationModal';
-import { Syringe, Sparkles, ChevronRight, Activity, Calendar, Heart, User, LogOut } from 'lucide-react';
+import { ChevronRight, Heart } from 'lucide-react';
 
 export function App() {
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => auth.getCurrentUser());
+  const { currentUser, setCurrentUser, handleLoginSuccess, handleLogout } = useAuth();
 
   const [compounds, setCompounds] = useState<Compound[]>([]);
   const [selectedCompoundId, setSelectedCompoundId] = useState<string>('test_cypionate');
@@ -51,92 +49,8 @@ export function App() {
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
-  // Deep Link listener for OAuth redirect (steadysync://login-callback)
-  useEffect(() => {
-    let isMounted = true;
-
-    const setupDeepLinkListener = async () => {
-      try {
-        const handler = await CapApp.addListener('appUrlOpen', async (data: { url: string }) => {
-          if (!data?.url) return;
-
-          // Process steadysync:// callback
-          if (data.url.startsWith('steadysync://') || data.url.includes('access_token=') || data.url.includes('code=')) {
-            // 1. If URL has hash with access_token (implicit flow)
-            if (data.url.includes('#access_token') || data.url.includes('access_token=')) {
-              const hashIndex = data.url.indexOf('#');
-              const hashString = hashIndex !== -1 ? data.url.substring(hashIndex + 1) : data.url.split('?')[1] || '';
-              const params = new URLSearchParams(hashString);
-              const accessToken = params.get('access_token');
-              const refreshToken = params.get('refresh_token');
-
-              if (accessToken && refreshToken && isSupabaseConfigured()) {
-                const { data: sessionData, error } = await supabase.auth.setSession({
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                });
-
-                if (!error && sessionData.user && isMounted) {
-                  const isAdmin = await supabaseSync.checkIsAdmin(sessionData.user.id);
-                  const cachedUser: UserAccount = {
-                    id: sessionData.user.id,
-                    name: sessionData.user.user_metadata?.name || sessionData.user.email?.split('@')[0] || 'Usuário',
-                    email: sessionData.user.email || '',
-                    gender: sessionData.user.user_metadata?.gender || 'male',
-                    therapeuticGoal: sessionData.user.user_metadata?.therapeutic_goal || 'male_trt',
-                    createdAt: sessionData.user.created_at,
-                    isAdmin,
-                  };
-                  handleLoginSuccess(cachedUser);
-                }
-              }
-            }
-
-            // 2. If URL has authorization code (PKCE flow)
-            if (data.url.includes('code=') && isSupabaseConfigured()) {
-              const queryIndex = data.url.indexOf('?');
-              if (queryIndex !== -1) {
-                const queryString = data.url.substring(queryIndex + 1);
-                const params = new URLSearchParams(queryString);
-                const code = params.get('code');
-                if (code) {
-                  const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
-                  if (!error && sessionData.user && isMounted) {
-                    const isAdmin = await supabaseSync.checkIsAdmin(sessionData.user.id);
-                    const cachedUser: UserAccount = {
-                      id: sessionData.user.id,
-                      name: sessionData.user.user_metadata?.name || sessionData.user.email?.split('@')[0] || 'Usuário',
-                      email: sessionData.user.email || '',
-                      gender: sessionData.user.user_metadata?.gender || 'male',
-                      therapeuticGoal: sessionData.user.user_metadata?.therapeutic_goal || 'male_trt',
-                      createdAt: sessionData.user.created_at,
-                      isAdmin,
-                    };
-                    handleLoginSuccess(cachedUser);
-                  }
-                }
-              }
-            }
-          }
-        });
-
-        return () => {
-          handler.remove();
-        };
-      } catch {
-        // Fallback for non-Capacitor environment
-      }
-    };
-
-    setupDeepLinkListener();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Load data for active user
-  const loadAllData = (targetUserId?: string) => {
+  // Load data for active user (single unified call per session)
+  const loadAllData = useCallback((targetUserId?: string) => {
     const uid = targetUserId || currentUser?.id;
     if (!uid) return;
 
@@ -185,88 +99,28 @@ export function App() {
         }
       });
     }
-  };
+  }, [currentUser?.id]);
 
+  // Unified single initialization effect per active session (Fix for Bug #29)
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.id) {
       loadAllData(currentUser.id);
       syncEngine.init(currentUser.id);
     }
     return () => {
       syncEngine.stop();
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, loadAllData]);
 
-  // Periodic background check for due medications & water reminders
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const checkReminders = () => {
-      const now = new Date();
-      const currentHourMinute = getLocalTimeKey(now);
-      const todayStr = getLocalDateKey(now);
-
-      // 1. Medication reminder check
-      if (notificationSettings.medicationReminders) {
-        const activeProtos = protocols.filter(p => p.active);
-        const due = activeProtos.filter(p => isProtocolDueToday(p));
-
-        if (due.length > 0 && notificationSettings.lastMedReminderDate !== todayStr) {
-          if (currentHourMinute >= (notificationSettings.medicationTime || '08:00')) {
-            const first = due[0];
-            const comp = compounds.find(c => c.id === first.compoundId);
-            const compDoseStr = formatCompoundDose(first.dose, comp?.unit).fullText;
-            notificationsService.sendMedicationReminder(
-              first.name,
-              compDoseStr,
-              notificationSettings.soundEnabled
-            );
-            const updated = { ...notificationSettings, lastMedReminderDate: todayStr };
-            setNotificationSettings(updated);
-            storage.saveNotificationSettings(updated, currentUser.id);
-          }
-        }
-      }
-
-      // 2. Water reminder check
-      if (notificationSettings.waterReminders) {
-        const lastTimestamp = notificationSettings.lastWaterReminderTimestamp || 0;
-        const intervalMs = (notificationSettings.waterIntervalHours || 2) * 3600000;
-        if (Date.now() - lastTimestamp >= intervalMs) {
-          const remaining = Math.max(0, (waterData.targetMl || 2500) - waterData.totalMl);
-          if (remaining > 0) {
-            notificationsService.sendWaterReminder(remaining, notificationSettings.soundEnabled);
-          }
-          const updated = { ...notificationSettings, lastWaterReminderTimestamp: Date.now() };
-          setNotificationSettings(updated);
-          storage.saveNotificationSettings(updated, currentUser.id);
-        }
-      }
-    };
-
-    checkReminders();
-    const interval = setInterval(checkReminders, 60000);
-    return () => clearInterval(interval);
-  }, [currentUser, protocols, compounds, waterData, notificationSettings]);
-
-  const handleSelectCompound = (id: string) => {
-    setSelectedCompoundId(id);
-    if (currentUser) {
-      storage.setActiveCompoundId(id, currentUser.id);
-    }
-  };
-
-  const handleLogout = () => {
-    syncEngine.stop();
-    auth.signOut();
-    setCurrentUser(null);
-  };
-
-  const handleLoginSuccess = (user: UserAccount) => {
-    setCurrentUser(user);
-    loadAllData(user.id);
-    syncEngine.init(user.id);
-  };
+  // Hook for background medication and hydration reminders
+  useReminders({
+    userId: currentUser?.id,
+    protocols,
+    compounds,
+    waterData,
+    notificationSettings,
+    setNotificationSettings,
+  });
 
   // Injection Handlers
   const handleSaveInjection = (newInj: Injection) => {
