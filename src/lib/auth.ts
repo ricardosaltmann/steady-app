@@ -7,16 +7,10 @@ const AUTH_STORAGE_KEYS = {
   CACHED_USER: 'steady_cached_user_v1',
 };
 
-// Explicit Admin Whitelist - Prevents insecure prefix matching
-export const ADMIN_WHITELIST: string[] = [
-  'admin@steadysync.com',
-  'ricardosaltmann@gmail.com',
-  'admin@steady.app',
-];
-
-export const isUserAdmin = (email: string, dbIsAdmin?: boolean): boolean => {
-  if (dbIsAdmin === true) return true;
-  return ADMIN_WHITELIST.includes(email.toLowerCase().trim());
+// Pure server-driven admin validation helper
+export const isUserAdmin = (dbIsAdmin?: boolean | null, roles?: string[]): boolean => {
+  if (roles && roles.includes('admin')) return true;
+  return dbIsAdmin === true;
 };
 
 // Default pre-seeded demo user so testers can log in with 1 click
@@ -113,7 +107,7 @@ export const auth = {
             selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories,
             createdAt: data.user.created_at,
             therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
-            isAdmin: isUserAdmin(cleanEmail, profile?.is_admin),
+            isAdmin: isUserAdmin(profile?.is_admin),
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
@@ -223,7 +217,7 @@ export const auth = {
             selectedCategories,
             createdAt: data.user.created_at || new Date().toISOString(),
             therapeuticGoal,
-            isAdmin: isUserAdmin(cleanEmail),
+            isAdmin: false,
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
@@ -252,7 +246,7 @@ export const auth = {
       passwordHash: password,
       createdAt: new Date().toISOString(),
       therapeuticGoal,
-      isAdmin: isUserAdmin(cleanEmail),
+      isAdmin: false,
     };
 
     users.push(newUser);
@@ -414,7 +408,7 @@ export const auth = {
             selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories || ['steroid', 'peptide'],
             createdAt: data.user.created_at,
             therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
-            isAdmin: isUserAdmin(cleanEmail, profile?.is_admin),
+            isAdmin: isUserAdmin(profile?.is_admin),
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);
@@ -468,7 +462,7 @@ export const auth = {
             selectedCategories: profile?.selected_categories || data.user.user_metadata?.selected_categories || ['steroid', 'peptide'],
             createdAt: data.user.created_at,
             therapeuticGoal: profile?.therapeutic_goal || data.user.user_metadata?.therapeutic_goal || 'male_trt',
-            isAdmin: isUserAdmin(cleanEmail, profile?.is_admin),
+            isAdmin: isUserAdmin(profile?.is_admin),
           };
 
           localStorage.setItem(AUTH_STORAGE_KEYS.CURRENT_USER_ID, userAccount.id);

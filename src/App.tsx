@@ -74,6 +74,7 @@ export function App() {
                 });
 
                 if (!error && sessionData.user && isMounted) {
+                  const isAdmin = await supabaseSync.checkIsAdmin(sessionData.user.id);
                   const cachedUser: UserAccount = {
                     id: sessionData.user.id,
                     name: sessionData.user.user_metadata?.name || sessionData.user.email?.split('@')[0] || 'Usuário',
@@ -81,7 +82,7 @@ export function App() {
                     gender: sessionData.user.user_metadata?.gender || 'male',
                     therapeuticGoal: sessionData.user.user_metadata?.therapeutic_goal || 'male_trt',
                     createdAt: sessionData.user.created_at,
-                    isAdmin: sessionData.user.email?.includes('ricardo') || false,
+                    isAdmin,
                   };
                   handleLoginSuccess(cachedUser);
                 }
@@ -98,6 +99,7 @@ export function App() {
                 if (code) {
                   const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
                   if (!error && sessionData.user && isMounted) {
+                    const isAdmin = await supabaseSync.checkIsAdmin(sessionData.user.id);
                     const cachedUser: UserAccount = {
                       id: sessionData.user.id,
                       name: sessionData.user.user_metadata?.name || sessionData.user.email?.split('@')[0] || 'Usuário',
@@ -105,7 +107,7 @@ export function App() {
                       gender: sessionData.user.user_metadata?.gender || 'male',
                       therapeuticGoal: sessionData.user.user_metadata?.therapeutic_goal || 'male_trt',
                       createdAt: sessionData.user.created_at,
-                      isAdmin: sessionData.user.email?.includes('ricardo') || false,
+                      isAdmin,
                     };
                     handleLoginSuccess(cachedUser);
                   }

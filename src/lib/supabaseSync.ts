@@ -439,6 +439,31 @@ export const supabaseSync = {
   },
 
   // --- ADMIN METHODS ---
+  checkIsAdmin: async (userId?: string): Promise<boolean> => {
+    if (!isSupabaseConfigured() || !userId || userId.startsWith('user_demo')) {
+      return false;
+    }
+
+    try {
+      // 1. Tenta RPC is_admin (segura via SECURITY DEFINER no PostgreSQL)
+      const { data: rpcAdmin, error: rpcError } = await supabase.rpc('is_admin');
+      if (!rpcError && typeof rpcAdmin === 'boolean') {
+        return rpcAdmin;
+      }
+
+      // 2. Fallback autoritativo consultando profiles.is_admin
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', userId)
+        .single();
+
+      return Boolean(profile?.is_admin);
+    } catch {
+      return false;
+    }
+  },
+
   getAdminUsers: async (): Promise<UserAccount[]> => {
     if (!isSupabaseConfigured()) {
       // Fallback to local accounts
