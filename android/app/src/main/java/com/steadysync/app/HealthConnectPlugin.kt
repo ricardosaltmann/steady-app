@@ -34,7 +34,8 @@ import java.time.Instant
         Permission(alias = "steps", strings = ["android.permission.health.READ_STEPS"]),
         Permission(alias = "sleep", strings = ["android.permission.health.READ_SLEEP"]),
         Permission(alias = "heartRate", strings = ["android.permission.health.READ_HEART_RATE"]),
-        Permission(alias = "hydration", strings = ["android.permission.health.READ_HYDRATION"])
+        Permission(alias = "hydration", strings = ["android.permission.health.READ_HYDRATION"]),
+        Permission(alias = "history", strings = ["android.permission.health.READ_HEALTH_DATA_HISTORY"])
     ]
 )
 class HealthConnectPlugin : Plugin() {
@@ -113,6 +114,8 @@ class HealthConnectPlugin : Plugin() {
                                 item.put("percentage", rec.percentage.value)
                                 item.put("value", rec.percentage.value)
                                 item.put("bodyFatPercent", rec.percentage.value)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -131,6 +134,8 @@ class HealthConnectPlugin : Plugin() {
                                 item.put("startTime", rec.startTime.toString())
                                 item.put("endTime", rec.endTime.toString())
                                 item.put("count", rec.count)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -150,6 +155,8 @@ class HealthConnectPlugin : Plugin() {
                                 item.put("endTime", rec.endTime.toString())
                                 val hours = Duration.between(rec.startTime, rec.endTime).toMinutes() / 60.0
                                 item.put("hours", hours)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -171,6 +178,8 @@ class HealthConnectPlugin : Plugin() {
                                     rec.samples.map { it.beatsPerMinute }.average()
                                 } else 0.0
                                 item.put("bpm", avgBpm)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -190,6 +199,8 @@ class HealthConnectPlugin : Plugin() {
                                 item.put("endTime", rec.endTime.toString())
                                 item.put("volumeLiters", rec.volume.inLiters)
                                 item.put("volumeMl", rec.volume.inMilliliters)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -211,6 +222,8 @@ class HealthConnectPlugin : Plugin() {
                                 val weightObj = JSObject()
                                 weightObj.put("inKilograms", rec.weight.inKilograms)
                                 item.put("weight", weightObj)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
                                 recordsArray.put(item)
                             }
                         } catch (e: Exception) {
@@ -290,6 +303,8 @@ class HealthConnectPlugin : Plugin() {
                 val wObj = JSObject()
                 wObj.put("inKilograms", rec.weight.inKilograms)
                 item.put("weight", wObj)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 weightsArray.put(item)
             }
         } catch (e: Exception) {
@@ -309,6 +324,8 @@ class HealthConnectPlugin : Plugin() {
                 item.put("percentage", rec.percentage.value)
                 item.put("value", rec.percentage.value)
                 item.put("bodyFatPercent", rec.percentage.value)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 bodyFatArray.put(item)
             }
         } catch (e: Exception) {
@@ -327,6 +344,8 @@ class HealthConnectPlugin : Plugin() {
                 item.put("startTime", rec.startTime.toString())
                 item.put("endTime", rec.endTime.toString())
                 item.put("count", rec.count)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 stepsArray.put(item)
             }
         } catch (e: Exception) {
@@ -346,6 +365,8 @@ class HealthConnectPlugin : Plugin() {
                 item.put("endTime", rec.endTime.toString())
                 val hours = Duration.between(rec.startTime, rec.endTime).toMinutes() / 60.0
                 item.put("hours", hours)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 sleepArray.put(item)
             }
         } catch (e: Exception) {
@@ -367,6 +388,8 @@ class HealthConnectPlugin : Plugin() {
                     rec.samples.map { it.beatsPerMinute }.average()
                 } else 0.0
                 item.put("bpm", avgBpm)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 heartRateArray.put(item)
             }
         } catch (e: Exception) {
@@ -386,6 +409,8 @@ class HealthConnectPlugin : Plugin() {
                 item.put("endTime", rec.endTime.toString())
                 item.put("volumeLiters", rec.volume.inLiters)
                 item.put("volumeMl", rec.volume.inMilliliters)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 hydrationArray.put(item)
             }
         } catch (e: Exception) {
@@ -405,6 +430,8 @@ class HealthConnectPlugin : Plugin() {
                 item.put("time", rec.time.toString())
                 item.put("glucoseMgDl", rec.level.inMilligramsPerDeciliter)
                 item.put("value", rec.level.inMilligramsPerDeciliter)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
                 glucoseArray.put(item)
             }
         } catch (e: Exception) {
