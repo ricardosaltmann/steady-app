@@ -692,6 +692,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Version info footer */}
+        <div className="pt-2 text-center text-[10px] text-slate-500 font-mono">
+          SteadySync v1.1.0-foundation • Local-First Architecture
+        </div>
       </div>
     </div>
   );
