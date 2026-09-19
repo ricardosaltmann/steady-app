@@ -67,6 +67,9 @@
 
     <!-- Permissions gerais e Health Connect (Leitura de Peso, Altura, Gordura Corporal, Glicose, Passos, Sono, Frequência Cardíaca, Hidratação) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_HEIGHT" />
     <uses-permission android:name="android.permission.health.READ_BODY_FAT" />

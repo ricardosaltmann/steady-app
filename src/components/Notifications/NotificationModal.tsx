@@ -25,13 +25,17 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
   onClose,
 }) => {
   const [localSettings, setLocalSettings] = useState<NotificationSettings>(settings);
-  const [browserPermission, setBrowserPermission] = useState<NotificationPermission>('default');
+  const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'prompt'>('prompt');
   const [testSent, setTestSent] = useState<string | null>(null);
 
   useEffect(() => {
-    if ('Notification' in window) {
-      setBrowserPermission(Notification.permission);
-    }
+    setLocalSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    notificationsService.checkPermissionStatus().then(status => {
+      setPermissionStatus(status);
+    });
   }, []);
 
   const activeProtocols = protocols.filter(p => p.active);
@@ -39,17 +43,16 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
 
   const handleRequestPermission = async () => {
     const granted = await notificationsService.requestPermission();
-    if ('Notification' in window) {
-      setBrowserPermission(Notification.permission);
-    }
+    setPermissionStatus(granted ? 'granted' : 'denied');
     if (granted) {
       notificationsService.sendTestNotification(localSettings.soundEnabled);
     }
+    return granted;
   };
 
   const handleToggleMedReminder = async () => {
     const next = !localSettings.medicationReminders;
-    if (next && browserPermission !== 'granted') {
+    if (next && permissionStatus !== 'granted') {
       await handleRequestPermission();
     }
     const updated = { ...localSettings, medicationReminders: next };
@@ -59,7 +62,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
 
   const handleToggleWaterReminder = async () => {
     const next = !localSettings.waterReminders;
-    if (next && browserPermission !== 'granted') {
+    if (next && permissionStatus !== 'granted') {
       await handleRequestPermission();
     }
     const updated = { ...localSettings, waterReminders: next };
@@ -131,15 +134,15 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
 
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 overscroll-contain">
           {/* Permission Status Banner */}
-          {browserPermission !== 'granted' ? (
+          {permissionStatus !== 'granted' ? (
             <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-amber-950/20 border border-amber-800/60 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <span className="text-xs font-bold text-white block">
-                  Permitir Notificações no Navegador
+                  Permitir Notificações no Aparelho
                 </span>
                 <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                  Para receber os alertas mesmo com o app em segundo plano, autorize as notificações do seu aparelho.
+                  Para receber os alertas de doses e hidratação mesmo com o app em segundo plano, autorize as notificações.
                 </p>
                 <button
                   type="button"
@@ -154,7 +157,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
             <div className="p-3 rounded-2xl bg-emerald-950/30 border border-emerald-800/40 flex items-center justify-between text-xs text-emerald-300">
               <span className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400" />
-                Notificações ativas e autorizadas no seu navegador!
+                Notificações ativas e autorizadas no seu aparelho!
               </span>
               <button
                 type="button"
