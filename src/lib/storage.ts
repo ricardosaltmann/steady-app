@@ -1,6 +1,10 @@
 import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, DailyActivitySummary, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
+import { getLocalDateKey } from './dateUtils';
 import { auth } from './auth';
+import { localRepository } from './localRepository';
+
+export { localRepository };
 
 // Helper to scope storage keys per authenticated user
 export const getScopedKey = (base: string, userId?: string): string => {
@@ -366,6 +370,9 @@ export const storage = {
     const withTs = (injections || []).map(i => ({
       ...i,
       updatedAt: i.updatedAt || new Date().toISOString(),
+      syncVersion: i.syncVersion || 1,
+      deletedAt: i.deletedAt || null,
+      dataSource: i.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -442,6 +449,9 @@ export const storage = {
     const withTs = filtered.map(p => ({
       ...p,
       updatedAt: p.updatedAt || new Date().toISOString(),
+      syncVersion: p.syncVersion || 1,
+      deletedAt: null,
+      dataSource: p.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -470,6 +480,9 @@ export const storage = {
     const withTs = (labs || []).map(l => ({
       ...l,
       updatedAt: l.updatedAt || new Date().toISOString(),
+      syncVersion: l.syncVersion || 1,
+      deletedAt: l.deletedAt || null,
+      dataSource: l.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -498,6 +511,9 @@ export const storage = {
     const withTs = (symptoms || []).map(s => ({
       ...s,
       updatedAt: s.updatedAt || new Date().toISOString(),
+      syncVersion: s.syncVersion || 1,
+      deletedAt: s.deletedAt || null,
+      dataSource: s.dataSource || 'manual',
     }));
     localStorage.setItem(key, JSON.stringify(withTs));
   },
@@ -589,7 +605,7 @@ export const storage = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_backup_${(user?.name || 'user').toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `steadysync_backup_${(user?.name || 'user').toLowerCase().replace(/\s+/g, '_')}_${getLocalDateKey()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -667,7 +683,7 @@ export const storage = {
 
   // --- Water & Hydration Tracking ---
   getWaterData: (dateStr?: string, userId?: string): DailyWaterData => {
-    const today = dateStr || new Date().toISOString().slice(0, 10);
+    const today = dateStr || getLocalDateKey();
     const key = getScopedKey(`water_${today}`, userId);
     const raw = localStorage.getItem(key);
     if (!raw) {

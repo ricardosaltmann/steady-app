@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Protocol, Compound, ProtocolFrequency } from '../../types';
 import { Calendar, Plus, CheckCircle2, Clock, Trash2, Edit3, ShieldAlert, Sparkles, Droplets, Syringe, X } from 'lucide-react';
 import { formatCompoundDose, getWeeklyTotalDose } from '../../lib/doseFormatter';
+import { getLocalDateKey } from '../../lib/dateUtils';
 
 interface ProtocolManagerProps {
   protocols: Protocol[];
@@ -40,7 +41,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
   const [route, setRoute] = useState<'IM' | 'SubQ' | 'Oral'>('IM');
   const [frequency, setFrequency] = useState<ProtocolFrequency>('every_3_5_days');
   const [intervalDays, setIntervalDays] = useState('3.5');
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(getLocalDateKey());
   const [notes, setNotes] = useState('');
 
   // Reconstitution states for peptides
@@ -112,7 +113,7 @@ export const ProtocolManager: React.FC<ProtocolManagerProps> = ({
     }
     setFrequency('every_3_5_days');
     setIntervalDays('3.5');
-    setStartDate(new Date().toISOString().slice(0, 10));
+    setStartDate(getLocalDateKey());
     setNotes('');
     setIsModalOpen(true);
   };

@@ -3,7 +3,12 @@ import { SymptomLog, UserProfile, Injection, GoogleHealthSyncConfig } from '../.
 import { googleFitSync, HealthImportEntry } from '../../lib/googleFitSync';
 import { storage } from '../../lib/storage';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { getLocalDateKey } from '../../lib/dateUtils';
 import { registerPlugin, Capacitor } from '@capacitor/core';
+import { calculateIMC } from '../../domain/clinical/biometrics';
+import { WeightModal, WeightFormData } from './WeightModal';
+import { SymptomModal, SymptomFormData } from './SymptomModal';
+import { TargetWeightModal } from './TargetWeightModal';
 
 interface HealthConnectPlugin {
   checkAvailability(): Promise<{ available: boolean }>;
@@ -35,9 +40,6 @@ import {
   Smartphone, 
   Target, 
   CheckCircle2, 
-  Info, 
-  X, 
-  Check, 
   Activity,
   FileSpreadsheet,
   Sparkles,
@@ -57,25 +59,6 @@ interface SymptomTrackerProps {
   injections?: Injection[];
 }
 
-export function calculateIMC(weightKg: number, heightCm: number): { 
-  value: number; 
-  label: string; 
-  color: string; 
-  badgeBg: string;
-} {
-  if (!weightKg || !heightCm || heightCm <= 0) {
-    return { value: 0, label: 'Indefinido', color: 'text-slate-400', badgeBg: 'bg-slate-800 text-slate-300' };
-  }
-  const heightM = heightCm / 100;
-  const imc = parseFloat((weightKg / (heightM * heightM)).toFixed(1));
-
-  if (imc < 18.5) return { value: imc, label: 'Abaixo do peso', color: 'text-sky-400', badgeBg: 'bg-sky-950/70 border border-sky-800/60 text-sky-300' };
-  if (imc < 25.0) return { value: imc, label: 'Peso Saudável', color: 'text-emerald-400', badgeBg: 'bg-emerald-950/70 border border-emerald-800/60 text-emerald-300' };
-  if (imc < 30.0) return { value: imc, label: 'Sobrepeso', color: 'text-amber-400', badgeBg: 'bg-amber-950/70 border border-amber-800/60 text-amber-300' };
-  if (imc < 35.0) return { value: imc, label: 'Obesidade Grau I', color: 'text-orange-400', badgeBg: 'bg-orange-950/70 border border-orange-800/60 text-orange-300' };
-  if (imc < 40.0) return { value: imc, label: 'Obesidade Grau II', color: 'text-rose-400', badgeBg: 'bg-rose-950/70 border border-rose-800/60 text-rose-300' };
-  return { value: imc, label: 'Obesidade Grau III', color: 'text-red-400', badgeBg: 'bg-red-950/70 border border-red-800/60 text-red-300' };
-}
 
 export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   symptoms,
@@ -96,30 +79,6 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
 
   // Height and Target Weight
   const currentHeight = profile?.heightCm || 175;
-  const [heightInput, setHeightInput] = useState<string>(String(currentHeight));
-  const [targetWeightInput, setTargetWeightInput] = useState<string>(profile?.targetWeightKg ? String(profile.targetWeightKg) : '');
-
-  // Weight & Body Measurements Form State
-  const [weightDate, setWeightDate] = useState(new Date().toISOString().slice(0, 10));
-  const [weightValue, setWeightValue] = useState<string>('82.0');
-  const [waistCm, setWaistCm] = useState<string>('');
-  const [hipCm, setHipCm] = useState<string>('');
-  const [armCm, setArmCm] = useState<string>('');
-  const [thighCm, setThighCm] = useState<string>('');
-  const [bodyFat, setBodyFat] = useState<string>('');
-  const [weightNotes, setWeightNotes] = useState<string>('');
-
-  // Symptoms Form State
-  const [sympDate, setSympDate] = useState(new Date().toISOString().slice(0, 10));
-  const [energy, setEnergy] = useState<number>(4);
-  const [libido, setLibido] = useState<number>(4);
-  const [mood, setMood] = useState<number>(4);
-  const [sleep, setSleep] = useState<number>(4);
-  const [acne, setAcne] = useState<number>(1);
-  const [waterRetention, setWaterRetention] = useState<number>(1);
-  const [systolic, setSystolic] = useState<string>('120');
-  const [diastolic, setDiastolic] = useState<string>('80');
-  const [sympNotes, setSympNotes] = useState<string>('');
 
   // Google Account Sync State
   const [googleConfig, setGoogleConfig] = useState<GoogleHealthSyncConfig>(() => storage.getGoogleHealthConfig());
@@ -133,7 +92,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [hasOAuthToken, setHasOAuthToken] = useState(false);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
-  const [quickImportDate, setQuickImportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [quickImportDate, setQuickImportDate] = useState(getLocalDateKey());
   const [quickImportWeight, setQuickImportWeight] = useState('');
   const [quickImportFat, setQuickImportFat] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -198,48 +157,50 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [symptoms]);
 
+  // Filter and sort subjective symptom logs - Apenas avaliações genuínas de bem-estar
+  const symptomEntries = useMemo(() => {
+    return symptoms
+      .filter(s => 
+        s.energy !== undefined || 
+        s.libido !== undefined || 
+        s.mood !== undefined || 
+        s.sleep !== undefined || 
+        s.waterRetention !== undefined ||
+        s.bloodPressureSystolic !== undefined ||
+        (s.notes && !s.notes.startsWith('Sincronizado via') && !s.notes.startsWith('Importado de'))
+      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [symptoms]);
+
   const latestWeight = weightEntries[0]?.weightKg || profile?.weightKg || 82.0;
   const oldestWeight = weightEntries[weightEntries.length - 1]?.weightKg || latestWeight;
   const weightChange = latestWeight - oldestWeight;
   const currentIMC = calculateIMC(latestWeight, currentHeight);
 
-  // Realtime IMC for modal calculator
-  const previewWeightNum = parseFloat(weightValue) || 0;
-  const previewHeightNum = parseFloat(heightInput) || currentHeight;
-  const previewIMC = calculateIMC(previewWeightNum, previewHeightNum);
-
   // Save Weight & Measurements
-  const handleSaveWeight = (e: React.FormEvent) => {
-    e.preventDefault();
-    const wNum = parseFloat(weightValue);
-    if (!wNum || isNaN(wNum)) return;
-
-    const hNum = parseFloat(heightInput);
-    if (hNum && onSaveProfile && profile) {
+  const handleSaveWeight = (data: WeightFormData) => {
+    if (onSaveProfile && profile) {
       onSaveProfile({
         ...profile,
-        heightCm: hNum,
-        weightKg: wNum,
+        heightCm: data.heightCm || currentHeight,
+        weightKg: data.weightKg,
       });
     }
 
+    const existingForDate = symptoms.find(s => s.date === data.date);
     const newLog: SymptomLog = {
-      id: 'symp_' + Date.now(),
-      date: weightDate,
-      weightKg: wNum,
-      heightCm: hNum || currentHeight,
-      waistCm: waistCm ? parseFloat(waistCm) : undefined,
-      hipCm: hipCm ? parseFloat(hipCm) : undefined,
-      armCm: armCm ? parseFloat(armCm) : undefined,
-      thighCm: thighCm ? parseFloat(thighCm) : undefined,
-      bodyFatPercent: bodyFat ? parseFloat(bodyFat) : undefined,
-      notes: weightNotes.trim() || undefined,
-      energy: 4,
-      libido: 4,
-      mood: 4,
-      sleep: 4,
-      acne: 1,
-      waterRetention: 1,
+      id: existingForDate?.id || ('symp_' + Date.now()),
+      date: data.date,
+      ...(existingForDate || {}),
+      weightKg: data.weightKg,
+      heightCm: data.heightCm || currentHeight,
+      waistCm: data.waistCm ?? existingForDate?.waistCm,
+      hipCm: data.hipCm ?? existingForDate?.hipCm,
+      armCm: data.armCm ?? existingForDate?.armCm,
+      thighCm: data.thighCm ?? existingForDate?.thighCm,
+      bodyFatPercent: data.bodyFatPercent ?? existingForDate?.bodyFatPercent,
+      notes: data.notes || existingForDate?.notes || undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     onSaveSymptom(newLog);
@@ -247,21 +208,22 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   };
 
   // Save Symptoms & Well-being
-  const handleSaveSymptoms = (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleSaveSymptoms = (data: SymptomFormData) => {
+    const existingForDate = symptoms.find(s => s.date === data.date);
     const newLog: SymptomLog = {
-      id: 'symp_' + Date.now(),
-      date: sympDate,
-      energy,
-      libido,
-      mood,
-      sleep,
-      acne,
-      waterRetention,
-      bloodPressureSystolic: systolic ? parseInt(systolic) : undefined,
-      bloodPressureDiastolic: diastolic ? parseInt(diastolic) : undefined,
-      notes: sympNotes.trim() || undefined,
+      id: existingForDate?.id || ('symp_' + Date.now()),
+      date: data.date,
+      ...(existingForDate || {}),
+      energy: data.energy,
+      libido: data.libido,
+      mood: data.mood,
+      sleep: data.sleep,
+      acne: data.acne,
+      waterRetention: data.waterRetention,
+      bloodPressureSystolic: data.bloodPressureSystolic ?? existingForDate?.bloodPressureSystolic,
+      bloodPressureDiastolic: data.bloodPressureDiastolic ?? existingForDate?.bloodPressureDiastolic,
+      notes: data.notes || existingForDate?.notes || undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     onSaveSymptom(newLog);
@@ -269,13 +231,12 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
   };
 
   // Save Target Weight
-  const handleSaveTarget = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveTarget = (targetWeightKg: number, heightCm: number) => {
     if (onSaveProfile && profile) {
       onSaveProfile({
         ...profile,
-        targetWeightKg: targetWeightInput ? parseFloat(targetWeightInput) : undefined,
-        heightCm: heightInput ? parseFloat(heightInput) : currentHeight,
+        targetWeightKg,
+        heightCm,
       });
     }
     setIsTargetModalOpen(false);
@@ -324,7 +285,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
         try {
           console.log('[Health Connect] Disparando requestPermissions nativo...');
           const permResult = await HealthConnect.requestPermissions({
-            permissions: ['weight', 'bodyFat', 'height', 'steps', 'sleep', 'heartRate', 'hydration']
+            permissions: ['weight', 'bodyFat', 'height', 'glucose', 'steps', 'sleep', 'heartRate', 'hydration', 'history']
           });
           console.log('[Health Connect] Pop-up respondido pelo usuário:', permResult);
         } catch (permErr: any) {
@@ -356,12 +317,13 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
           const sleepCount = hcData?.sleep?.length ?? 0;
           const hrCount = hcData?.heartRates?.length ?? 0;
           const bfCount = hcData?.bodyFat?.length ?? 0;
+          const glucoseCount = hcData?.glucose?.length ?? 0;
           const hydCount = hcData?.hydration?.length ?? 0;
-          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + hydCount;
+          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + glucoseCount + hydCount;
 
           // Alerta visual de debug solicitado pelo usuário APENAS no clique manual
           if (isManualClick) {
-            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
+            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Glicose: ${glucoseCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
           }
           console.log('[Health Connect] Resultado de leitura completa:', hcData);
         } catch (readErr: any) {
@@ -555,7 +517,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_google_health_export_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `steadysync_google_health_export_${getLocalDateKey()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -586,56 +548,10 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `steadysync_dados_saude_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `steadysync_dados_saude_${getLocalDateKey()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
-
-  const renderRatingButtons = (
-    label: string,
-    value: number,
-    onChange: (val: number) => void,
-    icon: React.ReactNode,
-    invertColors = false
-  ) => (
-    <div className="space-y-1.5 bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-slate-300 font-medium flex items-center gap-1.5">
-          {icon}
-          {label}
-        </span>
-        <span className="font-bold text-white text-xs">{value}/5</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        {[1, 2, 3, 4, 5].map(rating => {
-          const isSelected = value === rating;
-          let btnColor = 'bg-slate-900 text-slate-400 border-slate-800';
-          if (isSelected) {
-            if (invertColors) {
-              btnColor = rating >= 4 
-                ? 'bg-rose-600 text-white border-rose-500 shadow-sm' 
-                : 'bg-amber-600 text-white border-amber-500 shadow-sm';
-            } else {
-              btnColor = rating >= 4 
-                ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm' 
-                : 'bg-blue-600 text-white border-blue-500 shadow-sm';
-            }
-          }
-
-          return (
-            <button
-              key={rating}
-              type="button"
-              onClick={() => onChange(rating)}
-              className={`flex-1 py-1.5 rounded-xl border text-xs font-bold transition-all ${btnColor} cursor-pointer`}
-            >
-              {rating}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-5">
@@ -871,8 +787,9 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                   <tbody className="divide-y divide-slate-800/60">
                     {weightEntries.map(entry => {
                       const entryIMC = entry.weightKg ? calculateIMC(entry.weightKg, entry.heightCm || currentHeight) : null;
-                      const isHealthConnect = entry.notes?.includes('Health Connect');
-                      const isGoogleSynced = entry.notes?.includes('Google Fit');
+                      const isHealthConnect = entry.dataSource === 'health_connect' || entry.notes?.includes('Health Connect');
+                      const isGoogleSynced = entry.dataSource === 'google_fit' || entry.notes?.includes('Google Fit');
+                      const isCsvImport = entry.dataSource === 'csv_import' || entry.dataSource === 'import' || entry.notes?.includes('Fitbit');
 
                       return (
                         <tr key={entry.id} className="hover:bg-slate-800/30 transition-colors">
@@ -967,14 +884,19 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
                             {isHealthConnect ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-800/40">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-800/40" title={entry.dataOrigin || 'Health Connect Android'}>
                                 <Smartphone className="w-3 h-3" />
-                                Health Connect
+                                {entry.dataOrigin ? (entry.dataOrigin.includes('.') ? entry.dataOrigin.split('.').pop() : entry.dataOrigin) : 'Health Connect'}
                               </span>
                             ) : isGoogleSynced ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
                                 <Smartphone className="w-3 h-3" />
                                 Google Fit
+                              </span>
+                            ) : isCsvImport ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded-md border border-purple-800/40">
+                                <FileSpreadsheet className="w-3 h-3" />
+                                Import CSV
                               </span>
                             ) : (
                               <span className="text-slate-400 max-w-[130px] truncate block" title={entry.notes}>
@@ -1024,7 +946,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             </button>
           </div>
 
-          {symptoms.length === 0 ? (
+          {symptomEntries.length === 0 ? (
             <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-3xl p-6">
               <Smile className="w-12 h-12 text-slate-600 mx-auto mb-3" />
               <p className="text-slate-300 font-medium">Nenhum sintoma registrado ainda</p>
@@ -1034,7 +956,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {symptoms.map(log => (
+              {symptomEntries.map(log => (
                 <div 
                   key={log.id} 
                   className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-700 transition-colors"
@@ -1057,32 +979,32 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Flame className="w-3 h-3 text-amber-400" /> Energia
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">{log.energy}/5</span>
+                      <span className="text-xs font-bold text-white mt-0.5">{log.energy !== undefined ? `${log.energy}/5` : '-'}</span>
                     </div>
 
                     <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80 flex flex-col items-center">
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Heart className="w-3 h-3 text-rose-400" /> Libido
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">{log.libido}/5</span>
+                      <span className="text-xs font-bold text-white mt-0.5">{log.libido !== undefined ? `${log.libido}/5` : '-'}</span>
                     </div>
 
                     <div className="bg-slate-950 p-2 rounded-xl border border-slate-800/80 flex flex-col items-center">
                       <span className="text-[10px] text-slate-400 flex items-center gap-1">
                         <Moon className="w-3 h-3 text-indigo-400" /> Sono
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">{log.sleep}/5</span>
+                      <span className="text-xs font-bold text-white mt-0.5">{log.sleep !== undefined ? `${log.sleep}/5` : '-'}</span>
                     </div>
                   </div>
 
-                  {(log.bloodPressureSystolic || log.waterRetention > 2) && (
+                  {(log.bloodPressureSystolic || (log.waterRetention !== undefined && log.waterRetention > 2)) && (
                     <div className="flex items-center gap-3 text-[11px] text-slate-400 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-800/60">
                       {log.bloodPressureSystolic && (
                         <span className="text-slate-300 font-medium">
                           PA: {log.bloodPressureSystolic}/{log.bloodPressureDiastolic} mmHg
                         </span>
                       )}
-                      {log.waterRetention > 2 && (
+                      {log.waterRetention !== undefined && log.waterRetention > 2 && (
                         <span className="text-amber-400 flex items-center gap-1">
                           <Droplets className="w-3 h-3" /> Retenção {log.waterRetention}/5
                         </span>
@@ -1507,355 +1429,28 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
           </div>
         </div>
       )}
+      {/* Modais de Registro */}
+      <WeightModal
+        isOpen={isWeightModalOpen}
+        onClose={() => setIsWeightModalOpen(false)}
+        onSave={handleSaveWeight}
+        defaultHeightCm={currentHeight}
+        initialWeight={latestWeight}
+      />
 
-      {/* MODAL 1: REGISTRAR PESO & MEDIDAS */}
-      {isWeightModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
-            {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800/90 flex items-center justify-between shrink-0 bg-slate-900 z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                  <Scale className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Registrar Peso & Medidas</h3>
-                  <p className="text-xs text-slate-400">Calcula IMC e atualiza sua evolução corporal</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsWeightModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <SymptomModal
+        isOpen={isSymptomModalOpen}
+        onClose={() => setIsSymptomModalOpen(false)}
+        onSave={handleSaveSymptoms}
+      />
 
-            {/* Body */}
-            <form onSubmit={handleSaveWeight} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Peso Corporal (kg)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="30"
-                    max="300"
-                    required
-                    value={weightValue}
-                    onChange={e => setWeightValue(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-base font-bold text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Sua Altura (cm)
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="240"
-                    required
-                    value={heightInput}
-                    onChange={e => setHeightInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-base font-bold text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Realtime IMC Preview Badge */}
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-slate-400">IMC Calculado:</span>
-                  <div className="text-lg font-black text-white flex items-baseline gap-2">
-                    <span>{previewIMC.value}</span>
-                    <span className="text-xs text-slate-400 font-semibold">kg/m²</span>
-                  </div>
-                </div>
-                <span className={`text-xs font-bold px-3 py-1 rounded-lg ${previewIMC.badgeBg}`}>
-                  {previewIMC.label}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Data da Medição</label>
-                <input
-                  type="date"
-                  required
-                  value={weightDate}
-                  onChange={e => setWeightDate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              {/* Medidas Corporais Opcionais */}
-              <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
-                <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                  <Ruler className="w-3.5 h-3.5 text-amber-400" />
-                  Medidas Corporais (Opcionais)
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  <div>
-                    <label className="text-[11px] text-slate-400">Cintura (cm)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      placeholder="Ex: 82"
-                      value={waistCm}
-                      onChange={e => setWaistCm(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-400">Quadril (cm)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      placeholder="Ex: 100"
-                      value={hipCm}
-                      onChange={e => setHipCm(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-400">Braço (cm)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      placeholder="Ex: 39"
-                      value={armCm}
-                      onChange={e => setArmCm(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-400">Coxa (cm)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      placeholder="Ex: 58"
-                      value={thighCm}
-                      onChange={e => setThighCm(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-slate-400">% Gordura (BF)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex: 15.5"
-                      value={bodyFat}
-                      onChange={e => setBodyFat(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Notas / Contexto</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Pesagem matinal em jejum, dia após aplicação"
-                  value={weightNotes}
-                  onChange={e => setWeightNotes(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsWeightModalOpen(false)}
-                  className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Salvar Pesagem</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: REGISTRAR SINTOMAS */}
-      {isSymptomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
-            <div className="p-4 sm:p-5 border-b border-slate-800/90 flex items-center justify-between shrink-0 bg-slate-900 z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                  <Heart className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Check-in de Bem-Estar</h3>
-                  <p className="text-xs text-slate-400">Registre sua percepção corporal e sinais vitais</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsSymptomModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveSymptoms} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Data</label>
-                <input
-                  type="date"
-                  required
-                  value={sympDate}
-                  onChange={e => setSympDate(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              {renderRatingButtons('Energia & Disposição', energy, setEnergy, <Flame className="w-4 h-4 text-amber-400" />)}
-              {renderRatingButtons('Libido', libido, setLibido, <Heart className="w-4 h-4 text-rose-400" />)}
-              {renderRatingButtons('Humor & Foco', mood, setMood, <Smile className="w-4 h-4 text-blue-400" />)}
-              {renderRatingButtons('Qualidade do Sono', sleep, setSleep, <Moon className="w-4 h-4 text-indigo-400" />)}
-              {renderRatingButtons('Retenção Hídrica (Inchaço)', waterRetention, setWaterRetention, <Droplets className="w-4 h-4 text-cyan-400" />, true)}
-
-              {/* Pressão Arterial */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">Pressão Arterial (mmHg)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    value={systolic}
-                    onChange={e => setSystolic(e.target.value)}
-                    placeholder="Sistólica (ex: 120)"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <input
-                    type="number"
-                    value={diastolic}
-                    onChange={e => setDiastolic(e.target.value)}
-                    placeholder="Diastólica (ex: 80)"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Notas do Dia</label>
-                <input
-                  type="text"
-                  value={sympNotes}
-                  onChange={e => setSympNotes(e.target.value)}
-                  placeholder="Ex: Treino rendeu muito bem, sem dores de cabeça"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsSymptomModalOpen(false)}
-                  className="px-4 py-2 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Salvar Registro</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: DEFINIR META DE PESO */}
-      {isTargetModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden my-auto">
-            <div className="p-4 sm:p-5 border-b border-slate-800/90 flex items-center justify-between shrink-0 bg-slate-900 z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                  <Target className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Meta de Peso Corporal</h3>
-                  <p className="text-xs text-slate-400">Defina seu objetivo para acompanhar o progresso</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsTargetModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveTarget} className="p-4 sm:p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Qual é a sua meta de peso? (kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  required
-                  placeholder="Ex: 75.0"
-                  value={targetWeightInput}
-                  onChange={e => setTargetWeightInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-base font-bold text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Sua Altura (cm)
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={heightInput}
-                  onChange={e => setHeightInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsTargetModalOpen(false)}
-                  className="px-4 py-2 text-xs text-slate-400 hover:text-white cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
-                >
-                  Salvar Meta
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <TargetWeightModal
+        isOpen={isTargetModalOpen}
+        onClose={() => setIsTargetModalOpen(false)}
+        onSave={handleSaveTarget}
+        initialTargetWeightKg={profile?.targetWeightKg}
+        currentHeightCm={currentHeight}
+      />
     </div>
   );
 };

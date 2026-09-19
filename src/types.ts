@@ -51,7 +51,31 @@ export interface Compound {
   enabled?: boolean;        // Se está ativo para exibição nas listas e seletores diários
 }
 
-export interface Injection {
+export type ClinicalDataSource = 
+  | 'manual' 
+  | 'health_connect' 
+  | 'google_fit' 
+  | 'import' 
+  | 'csv_import' 
+  | 'device' 
+  | 'derived';
+
+export type HealthDataKind = 
+  | 'measured'       // Medição de sensor / balança / laboratório (ex: peso Health Connect, glicemia)
+  | 'user_reported'  // Informado subjetivamente pelo utilizador (ex: energia, humor, libido, notas)
+  | 'derived'        // Calculado por fórmula matemática direta (ex: IMC, razão T:E2)
+  | 'estimated';     // Projeção modelada (ex: curva de decaimento farmacocinético)
+
+export interface ClinicalMetadata {
+  dataSource?: ClinicalDataSource;
+  dataKind?: HealthDataKind;
+  dataOrigin?: string; // Pacote ou ID de origem física (ex: com.withings.wscale2, com.sec.android.app.shealth)
+  deletedAt?: string | null;
+  syncVersion?: number;
+  updatedAt?: string;
+}
+
+export interface Injection extends ClinicalMetadata {
   id: string;
   compoundId: string;
   date: string;            // ISO timestamp (YYYY-MM-DDTHH:mm)
@@ -62,7 +86,6 @@ export interface Injection {
   notes?: string;
   needleInfo?: string;     // e.g. 30G 1/2", 27G 1/2", 25G 1"
   protocolId?: string;     // Protocolo vinculado
-  updatedAt?: string;      // ISO timestamp para merge seguro de dados
 }
 
 export type ProtocolFrequency = 
@@ -74,7 +97,7 @@ export type ProtocolFrequency =
   | 'biweekly'         // A cada 2 semanas (Quinzenal)
   | 'monthly';
 
-export interface Protocol {
+export interface Protocol extends ClinicalMetadata {
   id: string;
   name: string;
   compoundId: string;
@@ -91,7 +114,6 @@ export interface Protocol {
   waterMl?: number;           // Água bacteriostática adicionada (ex: 2.6mL)
   concentrationMgMl?: number; // Concentração resultante em mg/mL (ex: 7.69)
   syringeUnits?: number;      // Unidades na seringa U-100 (ex: 32.5 UI)
-  updatedAt?: string;         // ISO timestamp para merge seguro de dados
 }
 
 export interface LabMarker {
@@ -104,7 +126,7 @@ export interface LabMarker {
   femaleRef?: { min: number; max: number };
 }
 
-export interface LabResult {
+export interface LabResult extends ClinicalMetadata {
   id: string;
   date: string;          // YYYY-MM-DD
   markers: {
@@ -115,18 +137,17 @@ export interface LabResult {
   }[];
   labName?: string;
   notes?: string;
-  updatedAt?: string;    // ISO timestamp para merge seguro de dados
 }
 
-export interface SymptomLog {
+export interface SymptomLog extends ClinicalMetadata {
   id: string;
   date: string;          // YYYY-MM-DD
-  energy: number;        // 1 - 5
-  libido: number;        // 1 - 5
-  mood: number;          // 1 - 5
-  sleep: number;         // 1 - 5
-  acne: number;          // 1 - 5
-  waterRetention: number;// 1 - 5
+  energy?: number;        // 1 - 5 (opcional: ausente se for registro puramente biométrico)
+  libido?: number;        // 1 - 5
+  mood?: number;          // 1 - 5
+  sleep?: number;         // 1 - 5
+  acne?: number;          // 1 - 5
+  waterRetention?: number;// 1 - 5
   bloodPressureSystolic?: number;
   bloodPressureDiastolic?: number;
   weightKg?: number;
@@ -143,7 +164,6 @@ export interface SymptomLog {
   thighCm?: number;        // Coxa (cm)
   chestCm?: number;        // Peitoral / Tórax (cm)
   notes?: string;
-  updatedAt?: string;      // ISO timestamp para merge seguro de dados
 }
 
 // Loja Secundária: Séries Temporais / Alta Frequência (Armazenamento em segundo plano)
@@ -153,6 +173,9 @@ export interface DailyActivitySummary {
   sleepHours?: number;     // Duração total do sono em horas
   heartRateBpm?: number;   // Média diária de batimentos cardíacos
   hydrationMl?: number;    // Hidratação acumulada em mL
+  dataOrigin?: string;     // Pacote de origem (ex: com.google.android.apps.fitness)
+  dataSource?: ClinicalDataSource;
+  dataKind?: HealthDataKind;
   updatedAt?: string;
 }
 
@@ -188,7 +211,6 @@ export interface UserAccount {
   activityLevel?: 'sedentary' | 'moderate' | 'active' | 'athlete';
   marketingConsent?: boolean;
   selectedCategories?: CompoundCategory[];
-  passwordHash?: string;
   createdAt: string;
   therapeuticGoal: 'male_trt' | 'female_hrt' | 'peptides' | 'peptides_glp1' | 'bodybuilding' | 'fertility' | 'other';
   isAdmin?: boolean;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Compound, Injection, InjectionSite, Protocol } from '../../types';
 import { BodySitePicker } from './BodySitePicker';
+import { getLocalDateKey, getLocalTimeKey } from '../../lib/dateUtils';
 import { X, Syringe, Calendar, Clock, Calculator, Check, Sparkles, Droplets } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -38,10 +39,8 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
   const [waterMl, setWaterMl] = useState<string>('2.6');
   const [volumeMl, setVolumeMl] = useState<string>('0.25');
   const [volumeUnits, setVolumeUnits] = useState<string>('25');
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [time, setTime] = useState<string>(
-    new Date().toTimeString().slice(0, 5)
-  );
+  const [date, setDate] = useState<string>(getLocalDateKey());
+  const [time, setTime] = useState<string>(getLocalTimeKey());
   const [site, setSite] = useState<InjectionSite>('deltoid_right');
   const [route, setRoute] = useState<'IM' | 'SubQ'>('IM');
   const [needleInfo, setNeedleInfo] = useState<string>('30G 1/2"');
@@ -191,8 +190,8 @@ export const InjectionModal: React.FC<InjectionModalProps> = ({
     if (!isOpen) return;
 
     // Reset date and time to current
-    setDate(new Date().toISOString().slice(0, 10));
-    setTime(new Date().toTimeString().slice(0, 5));
+    setDate(getLocalDateKey());
+    setTime(getLocalTimeKey());
 
     // If a specific protocol was passed (e.g. from clicking "Tomar Dose")
     if (selectedProtocol) {

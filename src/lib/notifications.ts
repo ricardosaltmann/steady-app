@@ -1,4 +1,6 @@
 import { Protocol } from '../types';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * Plays a pleasant clinical notification chime using the Web Audio API
@@ -33,36 +35,110 @@ export function playNotificationSound() {
 }
 
 /**
- * Requests browser notification permission
+ * Checks current notification permission status across native Android and Web
+ */
+export async function checkNotificationPermission(): Promise<'granted' | 'denied' | 'prompt'> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const status = await LocalNotifications.checkPermissions();
+      if (status.display === 'granted') return 'granted';
+      if (status.display === 'denied') return 'denied';
+      return 'prompt';
+    } catch (err) {
+      console.warn('[notifications] Error checking native permissions:', err);
+      return 'prompt';
+    }
+  }
+
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Notification.permission === 'granted') return 'granted';
+    if (Notification.permission === 'denied') return 'denied';
+    return 'prompt';
+  }
+
+  return 'prompt';
+}
+
+/**
+ * Requests notification permission across native Android (POST_NOTIFICATIONS) and Web
  */
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (!('Notification' in window)) {
-    return false;
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const res = await LocalNotifications.requestPermissions();
+      if (res.display === 'granted') {
+        try {
+          await LocalNotifications.createChannel({
+            id: 'steadysync_reminders',
+            name: 'Lembretes SteadySync',
+            description: 'Alertas de doses de medicamentos e hidratação',
+            importance: 5,
+            visibility: 1,
+            vibration: true,
+          });
+        } catch (e) {
+          console.warn('[notifications] Failed to create channel:', e);
+        }
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('[notifications] Error requesting native permission:', err);
+      return false;
+    }
   }
-  if (Notification.permission === 'granted') {
-    return true;
+
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
   }
-  if (Notification.permission !== 'denied') {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
-  }
+
   return false;
 }
 
 /**
- * Sends a native browser push notification
+ * Sends a notification via native Android LocalNotifications or Web Notification API
  */
-export function sendBrowserNotification(title: string, options?: NotificationOptions) {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') {
+export async function sendNotification(title: string, body: string, sound: boolean = true) {
+  if (sound) {
+    playNotificationSound();
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: Math.floor(Math.random() * 1000000) + 1,
+            title,
+            body,
+            channelId: 'steadysync_reminders',
+            smallIcon: 'ic_launcher',
+            sound: sound ? 'beep.wav' : undefined,
+            schedule: { at: new Date(Date.now() + 100) },
+          },
+        ],
+      });
+      return;
+    } catch (err) {
+      console.warn('[notifications] Could not schedule local notification:', err);
+    }
+  }
+
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
     try {
       new Notification(title, {
+        body,
         icon: '/pwa-192x192.png',
         badge: '/pwa-192x192.png',
-        ...options,
       });
     } catch (err) {
-      console.warn('Error sending Notification:', err);
+      console.warn('[notifications] Error sending browser notification:', err);
     }
   }
 }
@@ -109,29 +185,30 @@ export function isProtocolDueToday(protocol: Protocol): boolean {
  * High-level notification triggers for SteadySync
  */
 export const notificationsService = {
+  checkPermissionStatus: checkNotificationPermission,
   requestPermission: requestNotificationPermission,
 
   sendMedicationReminder: (protocolName: string, doseText: string, sound: boolean = true) => {
-    if (sound) playNotificationSound();
-    sendBrowserNotification(`SteadySync: Hora da sua dose 💉`, {
-      body: `Protocolo: ${protocolName} (${doseText}). Não se esqueça de registrar sua aplicação!`,
-      tag: 'medication_reminder',
-    });
+    sendNotification(
+      'SteadySync: Hora da sua dose 💉',
+      `Protocolo: ${protocolName} (${doseText}). Não se esqueça de registrar sua aplicação!`,
+      sound
+    );
   },
 
   sendWaterReminder: (targetRemainingMl: number, sound: boolean = true) => {
-    if (sound) playNotificationSound();
-    sendBrowserNotification(`SteadySync: Hora de se hidratar! 💧`, {
-      body: `Beba um copo de água (250ml) para manter seu metabolismo e hidratação celular. Faltam ${targetRemainingMl}ml para sua meta de hoje!`,
-      tag: 'water_reminder',
-    });
+    sendNotification(
+      'SteadySync: Hora de se hidratar! 💧',
+      `Beba um copo de água (250ml) para manter seu metabolismo e hidratação celular. Faltam ${targetRemainingMl}ml para sua meta de hoje!`,
+      sound
+    );
   },
 
   sendTestNotification: (sound: boolean = true) => {
-    if (sound) playNotificationSound();
-    sendBrowserNotification(`SteadySync: Notificações Ativadas! ✅`, {
-      body: `Seus lembretes de medicação e hidratação estão configurados com sucesso.`,
-      tag: 'test_notification',
-    });
+    sendNotification(
+      'SteadySync: Notificações Ativadas! ✅',
+      'Seus lembretes de medicação e hidratação estão configurados com sucesso.',
+      sound
+    );
   },
 };
