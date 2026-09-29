@@ -259,3 +259,137 @@ export interface NotificationSettings {
   lastWaterReminderTimestamp?: number;
   lastMedReminderDate?: string;
 }
+
+// ============================================================================
+// GYM & WORKOUT DOMAIN TYPES (SteadySync + openGym Fusion)
+// ============================================================================
+
+export type MuscleGroup =
+  | 'chest'
+  | 'back'
+  | 'shoulders'
+  | 'biceps'
+  | 'triceps'
+  | 'forearms'
+  | 'quads'
+  | 'hamstrings'
+  | 'glutes'
+  | 'calves'
+  | 'abs'
+  | 'traps'
+  | 'lats'
+  | 'lower_back'
+  | 'neck'
+  | 'cardio';
+
+export type ExerciseEquipment =
+  | 'barbell'
+  | 'dumbbell'
+  | 'cable'
+  | 'machine'
+  | 'bodyweight'
+  | 'kettlebell'
+  | 'band'
+  | 'smith'
+  | 'other';
+
+export type ProgressionType =
+  | 'linear'
+  | 'greyskull'
+  | 'double_progression'
+  | 'time'
+  | 'bodyweight';
+
+export interface Exercise {
+  id: string;
+  name: string;
+  bodyPart: string;
+  targetMuscle: MuscleGroup | string;
+  secondaryMuscles?: (MuscleGroup | string)[];
+  equipment: ExerciseEquipment;
+  category: 'strength' | 'hypertrophy' | 'cardio' | 'mobility' | 'timed';
+  isCustom?: boolean;
+  instructions?: string[];
+  gifUrl?: string;
+  isTimed?: boolean;
+  isBodyweight?: boolean;
+  isPerSide?: boolean;
+}
+
+export type SetType = 'warmup' | 'normal' | 'drop' | 'failure' | 'amrap';
+
+export interface WorkoutSet {
+  id: string;
+  setNumber: number;
+  type: SetType;
+  weightKg?: number;
+  reps?: number;
+  targetReps?: number;
+  targetWeightKg?: number;
+  rpe?: number; // 1 to 10
+  rir?: number; // 0 to 5 (Reps In Reserve)
+  durationSeconds?: number;
+  completed: boolean;
+  completedAt?: string;
+}
+
+export interface WorkoutExercise {
+  exerciseId: string;
+  exerciseName: string;
+  notes?: string;
+  restSeconds: number;
+  sets: WorkoutSet[];
+  supersetId?: string;
+  progression?: ProgressionType;
+}
+
+export interface WorkoutSession {
+  id: string;
+  userId?: string;
+  routineId?: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // ISO
+  endTime?: string; // ISO
+  durationSeconds: number;
+  exercises: WorkoutExercise[];
+  totalVolumeKg: number;
+  totalSets: number;
+  rpeAvg?: number;
+  notes?: string;
+  isCompleted: boolean;
+  is_deleted?: boolean;
+  deleted_at?: string;
+  version?: number;
+}
+
+export interface RoutineExerciseConfig {
+  exerciseId: string;
+  exerciseName?: string;
+  defaultSets: number;
+  targetRepRange: [number, number]; // [min, max] ex: [8, 12]
+  restSeconds: number;
+  progression: ProgressionType;
+  notes?: string;
+  supersetId?: string;
+}
+
+export interface Routine {
+  id: string;
+  userId?: string;
+  name: string;
+  description?: string;
+  emoji?: string;
+  targetWeekday?: number; // 0 = Sunday, 1 = Monday, ... 6 = Saturday
+  exercises: RoutineExerciseConfig[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
+  version?: number;
+}
+
+export type WeeklyPlanSchedule = Record<number, string | null>; // 0..6 (day index) -> routineId
+
+export type DayPlanOverrides = Record<string, string | null>; // 'YYYY-MM-DD' -> routineId (or null for rest day)

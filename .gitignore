@@ -25,3 +25,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Builds & Local Artifacts
+screenshots/
+*.apk
+*.aab
+android/app/build/
