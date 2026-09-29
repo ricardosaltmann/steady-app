@@ -4,6 +4,10 @@ import {
   Injection,
   DailyWaterData,
   DailySupplementData,
+  DailyDietData,
+  MealType,
+  FoodItem,
+  MacroGoals,
   UserProfile,
   Routine,
   WorkoutSession,
@@ -32,6 +36,7 @@ import {
 import { NavTab } from '../Navigation/BottomNav';
 import { SupplementCard } from '../Supplements/SupplementCard';
 import { SupplementModal } from '../Supplements/SupplementModal';
+import { DietCard, DietModal } from '../Diet';
 
 interface TodayViewProps {
   protocols: Protocol[];
@@ -39,6 +44,7 @@ interface TodayViewProps {
   injections: Injection[];
   waterData: DailyWaterData;
   supplementData: DailySupplementData;
+  dietData: DailyDietData;
   profile?: UserProfile | null;
   activeSession: WorkoutSession | null;
   routines: Routine[];
@@ -51,6 +57,10 @@ interface TodayViewProps {
   onToggleSupplementItem: (itemId: string) => void;
   onAddSupplementDose: (itemId: string, amount: number) => void;
   onSaveSupplementData: (data: DailySupplementData) => void;
+  onAddFood: (mealType: MealType, food: Omit<FoodItem, 'id'>) => void;
+  onRemoveFood: (mealType: MealType, foodId: string) => void;
+  onUpdateDietGoals: (goals: MacroGoals) => void;
+  onDietReload: () => void;
   onNavigateTab: (tab: NavTab) => void;
 }
 
@@ -60,6 +70,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
   injections,
   waterData,
   supplementData,
+  dietData,
   profile,
   activeSession,
   routines,
@@ -72,9 +83,15 @@ export const TodayView: React.FC<TodayViewProps> = ({
   onToggleSupplementItem,
   onAddSupplementDose,
   onSaveSupplementData,
+  onAddFood,
+  onRemoveFood,
+  onUpdateDietGoals,
+  onDietReload,
   onNavigateTab,
 }) => {
   const [isSupplementModalOpen, setIsSupplementModalOpen] = useState(false);
+  const [isDietModalOpen, setIsDietModalOpen] = useState(false);
+  const [dietModalTab, setDietModalTab] = useState<'diary' | 'import' | 'goals'>('diary');
   const todayStr = getLocalDateKey();
   const todayDate = new Date();
   const currentWeekday = todayDate.getDay(); // 0 = Sunday ... 6 = Saturday
@@ -360,6 +377,19 @@ export const TodayView: React.FC<TodayViewProps> = ({
         </div>
       </div>
 
+      {/* DIET & NUTRITION CARD (MyFitnessPal Fusion: Calorie Ring & Macros) */}
+      <DietCard
+        dietData={dietData}
+        onOpenDietModal={() => {
+          setDietModalTab('diary');
+          setIsDietModalOpen(true);
+        }}
+        onOpenImportModal={() => {
+          setDietModalTab('import');
+          setIsDietModalOpen(true);
+        }}
+      />
+
       {/* DAILY SUPPLEMENT STACK CARD (Creatine, Whey, Vitamins) */}
       <SupplementCard
         supplementData={supplementData}
@@ -550,6 +580,18 @@ export const TodayView: React.FC<TodayViewProps> = ({
         onClose={() => setIsSupplementModalOpen(false)}
         supplementData={supplementData}
         onSaveData={onSaveSupplementData}
+      />
+
+      {/* Diet Modal (MyFitnessPal Fusion) */}
+      <DietModal
+        isOpen={isDietModalOpen}
+        onClose={() => setIsDietModalOpen(false)}
+        dietData={dietData}
+        onAddFood={onAddFood}
+        onRemoveFood={onRemoveFood}
+        onUpdateGoals={onUpdateDietGoals}
+        onDietReload={onDietReload}
+        initialTab={dietModalTab}
       />
     </div>
   );

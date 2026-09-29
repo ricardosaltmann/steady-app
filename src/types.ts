@@ -270,6 +270,42 @@ export interface DailySupplementData {
   streakDays: number;
 }
 
+// ============================================================================
+// DIET & NUTRITION DOMAIN TYPES (MyFitnessPal Fusion)
+// ============================================================================
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface FoodItem {
+  id: string;
+  name: string;
+  calories: number; // kcal
+  protein: number;  // g
+  carbs: number;    // g
+  fat: number;      // g
+  portion?: string; // ex: '150g', '1 scoop', '2 fatias'
+  loggedAt?: string;// HH:mm
+}
+
+export interface MacroGoals {
+  calories: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatGrams: number;
+}
+
+export interface DailyDietData {
+  date: string; // YYYY-MM-DD
+  goals: MacroGoals;
+  meals: {
+    breakfast: FoodItem[];
+    lunch: FoodItem[];
+    dinner: FoodItem[];
+    snack: FoodItem[];
+  };
+  exerciseCaloriesBurned: number;
+}
+
 export interface NotificationSettings {
   medicationReminders: boolean;
   medicationTime: string; // '08:00'

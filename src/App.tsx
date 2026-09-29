@@ -6,8 +6,9 @@ import { auth } from './lib/auth';
 import { getLocalDateKey, getLocalTimeKey } from './lib/dateUtils';
 import { isProtocolDueToday } from './lib/notifications';
 import { formatCompoundDose } from './lib/doseFormatter';
-import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, DailyWaterData, DailySupplementData, NotificationSettings, UserAccount } from './types';
+import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, DailyWaterData, DailySupplementData, DailyDietData, MealType, FoodItem, MacroGoals, NotificationSettings, UserAccount } from './types';
 import { healthConnectProvider } from './lib/health/HealthConnectProvider';
+import { dietStorage } from './lib/diet/dietStorage';
 import { useAuth } from './hooks/useAuth';
 import { useReminders } from './hooks/useReminders';
 import { AuthScreen } from './components/Auth/AuthScreen';
@@ -46,6 +47,7 @@ export function App() {
   const [profile, setProfile] = useState<UserProfile>({ name: '', gender: 'male' });
   const [waterData, setWaterData] = useState<DailyWaterData>(() => storage.getWaterData());
   const [supplementData, setSupplementData] = useState<DailySupplementData>(() => storage.getSupplementData());
+  const [dietData, setDietData] = useState<DailyDietData>(() => dietStorage.getDietData());
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() => storage.getNotificationSettings());
 
   const [currentTab, setCurrentTab] = useState<NavTab>('today');
@@ -83,6 +85,7 @@ export function App() {
     const activeId = storage.getActiveCompoundId(uid);
     const loadedWater = storage.getWaterData(undefined, uid);
     const loadedSupplements = storage.getSupplementData(undefined, uid);
+    const loadedDiet = dietStorage.getDietData(undefined, uid);
     const loadedNotifications = storage.getNotificationSettings(uid);
 
     setCompounds(loadedCompounds);
@@ -93,6 +96,7 @@ export function App() {
     setProfile(loadedProfile);
     setWaterData(loadedWater);
     setSupplementData(loadedSupplements);
+    setDietData(loadedDiet);
     setNotificationSettings(loadedNotifications);
     
     // Ensure selectedCompoundId exists and is an enabled compound
@@ -401,6 +405,36 @@ export function App() {
     setSupplementData(data);
   };
 
+  // Diet & Nutrition Handlers (MyFitnessPal Fusion)
+  const handleAddFood = (mealType: MealType, food: Omit<FoodItem, 'id'>) => {
+    const updated = dietStorage.addFoodItem(mealType, food, undefined, currentUser?.id);
+    setDietData(updated);
+
+    // Export protein / meal intake to Health Connect
+    if (food.protein > 0 || food.calories > 0) {
+      healthConnectProvider.writeNutritionRecord({
+        name: food.name,
+        proteinGrams: food.protein,
+      }).catch(err => console.warn('[HealthConnect] Erro ao gravar nutrição:', err));
+    }
+  };
+
+  const handleRemoveFood = (mealType: MealType, foodId: string) => {
+    const updated = dietStorage.removeFoodItem(mealType, foodId, undefined, currentUser?.id);
+    setDietData(updated);
+  };
+
+  const handleUpdateDietGoals = (goals: MacroGoals) => {
+    dietStorage.saveMacroGoals(goals, currentUser?.id);
+    const updated = dietStorage.getDietData(undefined, currentUser?.id);
+    setDietData(updated);
+  };
+
+  const handleDietReload = () => {
+    const reloaded = dietStorage.getDietData(undefined, currentUser?.id);
+    setDietData(reloaded);
+  };
+
   // Profile & Compound Handlers
   const handleSaveProfile = (newProfile: UserProfile, updatedAccount?: Partial<UserAccount>) => {
     storage.saveProfile(newProfile, currentUser?.id);
@@ -541,6 +575,11 @@ export function App() {
             onToggleSupplementItem={handleToggleSupplement}
             onAddSupplementDose={handleAddSupplementDose}
             onSaveSupplementData={handleSaveSupplementData}
+            dietData={dietData}
+            onAddFood={handleAddFood}
+            onRemoveFood={handleRemoveFood}
+            onUpdateDietGoals={handleUpdateDietGoals}
+            onDietReload={handleDietReload}
             onNavigateTab={(tab) => setCurrentTab(tab)}
           />
         )}

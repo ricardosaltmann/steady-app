@@ -5,8 +5,11 @@ import {
   Calendar,
   Play,
   Dumbbell,
+  BarChart3,
+  Layers,
 } from 'lucide-react';
 import { UnifiedAnatomyMap } from '../Anatomy/UnifiedAnatomyMap';
+import { GymStatsView } from './GymStatsView';
 
 interface RoutineManagerProps {
   onStartRoutine: (routine: Routine) => void;
@@ -14,7 +17,7 @@ interface RoutineManagerProps {
 
 export const RoutineManager: React.FC<RoutineManagerProps> = ({ onStartRoutine }) => {
   const { routines, history } = useWorkoutStore();
-  const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
+  const [activeGymTab, setActiveGymTab] = useState<'routines' | 'stats'>('routines');
 
   // Group past workouts by routine to show stats
   const totalCompletedWorkouts = history.length;
@@ -22,34 +25,71 @@ export const RoutineManager: React.FC<RoutineManagerProps> = ({ onStartRoutine }
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-cyan-950/40 via-slate-900 to-blue-950/30 border border-cyan-800/40 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-              <Dumbbell className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-black text-white">Rotinas de Treino & Hipertrofia</h2>
-          </div>
-          <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
-            Periodização científica sincronizada com sua farmacocinética. Registre cargas, repetições e acompanhe a evolução de volume.
-          </p>
-        </div>
+      {/* Top Segmented Tab Controller (openGym style) */}
+      <div className="flex items-center gap-1.5 p-1 bg-[#10121a]/90 border border-white/[0.08] rounded-2xl w-full sm:w-fit shadow-lg backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => setActiveGymTab('routines')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeGymTab === 'routines'
+              ? 'bg-[#ccff00] text-black shadow-md shadow-[#ccff00]/20 font-black'
+              : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+          }`}
+        >
+          <Dumbbell className="w-3.5 h-3.5" />
+          <span>Rotinas & Treinos</span>
+        </button>
 
-        {/* Global Workout Stats */}
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
-          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl px-4 py-2 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Sessões</span>
-            <span className="text-base font-black text-white">{totalCompletedWorkouts}</span>
-          </div>
-          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl px-4 py-2 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Volume Total</span>
-            <span className="text-base font-black text-cyan-400">
-              {(totalVolumeAllTime / 1000).toFixed(1)}t
-            </span>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveGymTab('stats')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeGymTab === 'stats'
+              ? 'bg-[#ccff00] text-black shadow-md shadow-[#ccff00]/20 font-black'
+              : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>Estatísticas & Músculos (openGym)</span>
+        </button>
       </div>
+
+      {/* VIEW 1: OPEN-GYM STATS (HEATMAP & MUSCLE BALANCE) */}
+      {activeGymTab === 'stats' && (
+        <GymStatsView history={history} />
+      )}
+
+      {/* VIEW 2: ROUTINES MANAGER */}
+      {activeGymTab === 'routines' && (
+        <div className="space-y-6">
+          {/* Top Banner */}
+          <div className="bg-[#10121a]/90 border border-white/[0.08] rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 backdrop-blur-xl">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/20">
+                  <Dumbbell className="w-5 h-5" />
+                </div>
+                <h2 className="text-lg font-black text-white">Rotinas de Treino & Hipertrofia</h2>
+              </div>
+              <p className="text-xs text-slate-400 max-w-xl leading-relaxed">
+                Periodização científica com progressão linear e controle de RIR sincronizado à farmacocinética.
+              </p>
+            </div>
+
+            {/* Global Workout Stats */}
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+              <div className="bg-black/40 border border-white/[0.06] rounded-2xl px-4 py-2 text-center">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Sessões</span>
+                <span className="text-base font-black text-white">{totalCompletedWorkouts}</span>
+              </div>
+              <div className="bg-black/40 border border-white/[0.06] rounded-2xl px-4 py-2 text-center">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Volume Total</span>
+                <span className="text-base font-black text-[#ccff00] font-mono">
+                  {(totalVolumeAllTime / 1000).toFixed(1)}t
+                </span>
+              </div>
+            </div>
+          </div>
 
       {/* Routines List */}
       <div className="space-y-3">
@@ -109,7 +149,7 @@ export const RoutineManager: React.FC<RoutineManagerProps> = ({ onStartRoutine }
               <button
                 type="button"
                 onClick={() => onStartRoutine(routine)}
-                className="w-full py-2.5 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-950/40 cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-2xl bg-[#ccff00] hover:bg-[#bfe600] text-black font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-[#ccff00]/20 cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Iniciar Treino</span>
@@ -125,6 +165,8 @@ export const RoutineManager: React.FC<RoutineManagerProps> = ({ onStartRoutine }
         workoutSessions={history}
         className="mt-6"
       />
+        </div>
+      )}
     </div>
   );
 };
