@@ -1,10 +1,11 @@
 import { auth } from './auth';
 
-export type OutboxEntityType = 'injection' | 'protocol' | 'lab' | 'symptom' | 'water' | 'profile';
+export type OutboxEntityType = 'injection' | 'protocol' | 'lab' | 'symptom' | 'water' | 'profile' | 'workout';
 export type OutboxAction = 'upsert' | 'delete';
 
 export interface OutboxItem {
   id: string;
+  mutationId: string;
   entityId: string;
   entityType: OutboxEntityType;
   action: OutboxAction;
@@ -21,6 +22,44 @@ const getOutboxKey = (userId?: string): string => {
 };
 
 export const syncOutbox = {
+  /**
+   * Universal Tombstone Helpers to prevent deleted items from resurrecting on pull.
+   */
+  addTombstone: (entityType: OutboxEntityType, entityId: string, userId?: string) => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = `steady_${uid}_tombstones`;
+    const raw = localStorage.getItem(key);
+    let list: Array<{ entityType: OutboxEntityType; entityId: string; deletedAt: string }> = [];
+    if (raw) {
+      try { list = JSON.parse(raw); } catch { list = []; }
+    }
+    if (!list.some(t => t.entityType === entityType && t.entityId === entityId)) {
+      list.push({ entityType, entityId, deletedAt: new Date().toISOString() });
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  },
+
+  isTombstoned: (entityType: OutboxEntityType, entityId: string, userId?: string): boolean => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = `steady_${uid}_tombstones`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    try {
+      const list: Array<{ entityType: OutboxEntityType; entityId: string }> = JSON.parse(raw);
+      return list.some(t => t.entityType === entityType && t.entityId === entityId);
+    } catch {
+      return false;
+    }
+  },
+
+  getTombstones: (userId?: string): Array<{ entityType: OutboxEntityType; entityId: string; deletedAt: string }> => {
+    const uid = userId || auth.getCurrentUser()?.id || 'user_demo';
+    const key = `steady_${uid}_tombstones`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+  },
+
   /**
    * Retrieves all outbox items stored in localStorage.
    */
@@ -47,6 +86,7 @@ export const syncOutbox = {
   /**
    * Enqueues a change (upsert or delete).
    * Smartly collapses rapid modifications to the same entity to prevent churn.
+   * Generates idempotent mutationId for exactly-once cloud processing.
    */
   enqueue: (
     entityType: OutboxEntityType,
@@ -58,6 +98,11 @@ export const syncOutbox = {
     const key = getOutboxKey(userId);
     const all = syncOutbox.getAll(userId);
     const nowIso = new Date().toISOString();
+    const mutationId = `mut_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    if (action === 'delete') {
+      syncOutbox.addTombstone(entityType, entityId, userId);
+    }
 
     const existingIndex = all.findIndex(
       i => i.entityType === entityType && i.entityId === entityId
@@ -70,6 +115,7 @@ export const syncOutbox = {
       // Collapse mutations
       item = {
         ...existing,
+        mutationId,
         action,
         payload: action === 'delete' ? undefined : payload,
         clientTimestamp: nowIso,
@@ -79,8 +125,10 @@ export const syncOutbox = {
       };
       all[existingIndex] = item;
     } else {
+      const id = `outbox_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       item = {
-        id: `outbox_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        id,
+        mutationId,
         entityId,
         entityType,
         action,

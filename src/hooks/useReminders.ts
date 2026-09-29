@@ -69,6 +69,7 @@ export function useReminders({
     };
 
     checkReminders();
+    notificationsService.scheduleAdvanceReminders(protocols, notificationSettings);
     const interval = setInterval(checkReminders, 60000);
     return () => clearInterval(interval);
   }, [userId, protocols, compounds, waterData, notificationSettings, setNotificationSettings]);

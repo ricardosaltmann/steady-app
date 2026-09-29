@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, UserAccount, Compound, CompoundCategory, PrivacySettings } from '../../types';
 import { storage } from '../../lib/storage';
 import { CompoundManager } from './CompoundManager';
-import { Settings, Download, Upload, RotateCcw, Plus, ShieldCheck, User, Sliders, X, Globe, Lock, LogOut, CheckCircle2, Mail, Phone, Calendar } from 'lucide-react';
+import { DeleteAccountModal } from './DeleteAccountModal';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal';
+import { Settings, Download, Upload, RotateCcw, Plus, ShieldCheck, User, Sliders, X, Globe, Lock, LogOut, CheckCircle2, Mail, Phone, Calendar, Trash2, FileText } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -35,6 +37,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'compounds' | 'profile' | 'backup'>(initialTab || 'compounds');
   const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(() => storage.getPrivacySettings());
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
 
   // Profile form state
   const [name, setName] = useState(profile?.name || currentUser?.name || '');
@@ -47,7 +51,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [targetWeightKg, setTargetWeightKg] = useState(profile?.targetWeightKg ? String(profile.targetWeightKg) : currentUser?.targetWeightKg ? String(currentUser.targetWeightKg) : '');
   const [bodyFat, setBodyFat] = useState(profile?.bodyFatPercent ? String(profile.bodyFatPercent) : currentUser?.bodyFatPercent ? String(currentUser.bodyFatPercent) : '');
   const [activityLevel, setActivityLevel] = useState<'sedentary' | 'moderate' | 'active' | 'athlete'>(profile?.activityLevel || currentUser?.activityLevel || 'moderate');
-  const [marketingConsent, setMarketingConsent] = useState(profile?.marketingConsent ?? currentUser?.marketingConsent ?? true);
+  const [marketingConsent, setMarketingConsent] = useState(profile?.marketingConsent ?? currentUser?.marketingConsent ?? false);
 
   // Synchronize state when modal opens or profile/currentUser updates
   useEffect(() => {
@@ -690,14 +694,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </ul>
               </div>
             </div>
+
+            {/* Compliance, Privacy Policy & Account Deletion (Google Play & LGPD Ready) */}
+            <div className="pt-3 border-t border-slate-800 space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsPrivacyModalOpen(true)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 border border-slate-700/80 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-cyan-400" />
+                  <span>Política de Privacidade & Termos</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-950/40 border border-rose-800/60 hover:bg-rose-900/50 text-rose-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-400" />
+                  <span>Excluir Conta e Dados</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Version info footer */}
         <div className="pt-2 text-center text-[10px] text-slate-500 font-mono">
-          SteadySync v1.1.0-foundation • Local-First Architecture
+          SteadySync v1.2.0 • Local-First Architecture • Google Play Verified
         </div>
       </div>
+
+      {/* Account Deletion Modal */}
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        userId={currentUser?.id}
+        onAccountDeleted={() => {
+          setIsDeleteModalOpen(false);
+          onReloadAllData();
+          if (onLogout) onLogout();
+          onClose();
+        }}
+      />
+
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+      />
     </div>
   );
 };

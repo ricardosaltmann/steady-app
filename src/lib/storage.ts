@@ -3,6 +3,7 @@ import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { getLocalDateKey } from './dateUtils';
 import { auth } from './auth';
 import { localRepository } from './localRepository';
+import { nativeFileMirror } from './nativeFileMirror';
 
 export { localRepository };
 
@@ -601,15 +602,8 @@ export const storage = {
       symptoms: storage.getSymptoms(userId),
       profile: storage.getProfile(userId),
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `steadysync_backup_${(user?.name || 'user').toLowerCase().replace(/\s+/g, '_')}_${getLocalDateKey()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const filename = `steadysync_backup_${(user?.name || 'user').toLowerCase().replace(/\s+/g, '_')}_${getLocalDateKey()}.json`;
+    nativeFileMirror.exportAndShareBackup(filename, payload);
   },
 
   importBackup: (jsonString: string, userId?: string): boolean => {

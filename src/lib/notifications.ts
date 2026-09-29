@@ -211,4 +211,90 @@ export const notificationsService = {
       sound
     );
   },
+
+  scheduleAdvanceReminders: async (protocols: Protocol[], settings: NotificationSettings) => {
+    return scheduleAdvanceReminders(protocols, settings);
+  },
 };
+
+/**
+ * Schedules upcoming native alarms 7 days in advance.
+ * Survives process death and phone deep sleep.
+ */
+export async function scheduleAdvanceReminders(
+  protocols: Protocol[],
+  settings: NotificationSettings
+): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+
+  try {
+    const pending = await LocalNotifications.getPending();
+    if (pending.notifications.length > 0) {
+      await LocalNotifications.cancel({ notifications: pending.notifications });
+    }
+
+    if (!settings.medicationReminders) return;
+
+    const [targetHour, targetMinute] = (settings.medicationTime || '08:00').split(':').map(Number);
+    const notificationsToSchedule: any[] = [];
+    const now = new Date();
+
+    // Schedule 7 days ahead
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const checkDate = new Date();
+      checkDate.setDate(now.getDate() + dayOffset);
+      checkDate.setHours(targetHour, targetMinute, 0, 0);
+
+      if (checkDate.getTime() <= now.getTime()) continue;
+
+      protocols.forEach((proto, pIdx) => {
+        if (!proto.active) return;
+
+        const start = new Date(proto.startDate);
+        start.setHours(0, 0, 0, 0);
+        const dayOnly = new Date(checkDate);
+        dayOnly.setHours(0, 0, 0, 0);
+
+        if (dayOnly < start) return;
+
+        let isDue = false;
+        if (proto.frequency === 'daily') isDue = true;
+        else if (proto.frequency === 'eod') {
+          const diffDays = Math.round((dayOnly.getTime() - start.getTime()) / 86400000);
+          isDue = diffDays % 2 === 0;
+        } else if (proto.frequency === 'every_3_5_days') {
+          const dow = checkDate.getDay();
+          isDue = dow === 1 || dow === 4;
+        } else if (proto.frequency === 'weekly') {
+          isDue = checkDate.getDay() === start.getDay();
+        } else if (proto.frequency === 'every_x_days' && proto.intervalDays) {
+          const diffDays = Math.round((dayOnly.getTime() - start.getTime()) / 86400000);
+          isDue = diffDays % proto.intervalDays === 0;
+        }
+
+        if (isDue) {
+          const notifId = (dayOffset * 1000) + (pIdx + 1);
+          notificationsToSchedule.push({
+            id: notifId,
+            title: 'SteadySync: Hora da sua dose 💉',
+            body: `Lembrete agendado: ${proto.name} (${proto.dose}). Registre sua aplicação no app!`,
+            channelId: 'steadysync_reminders',
+            smallIcon: 'ic_launcher',
+            sound: settings.soundEnabled ? 'beep.wav' : undefined,
+            schedule: {
+              at: checkDate,
+              allowWhileIdle: true,
+            },
+          });
+        }
+      });
+    }
+
+    if (notificationsToSchedule.length > 0) {
+      await LocalNotifications.schedule({ notifications: notificationsToSchedule });
+      console.log(`[notifications] Agendadas ${notificationsToSchedule.length} notificações com antecedência.`);
+    }
+  } catch (err) {
+    console.warn('[notifications] Falha ao agendar alarmes futuros:', err);
+  }
+}

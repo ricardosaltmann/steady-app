@@ -18,7 +18,7 @@ create table if not exists public.profiles (
   body_fat_percent numeric,
   goal text,
   activity_level text default 'moderate',
-  marketing_consent boolean default true,
+  marketing_consent boolean default false,
   selected_categories text[] default array['peptide', 'steroid'],
   therapeutic_goal text default 'male_trt',
   is_admin boolean default false,
@@ -37,7 +37,7 @@ alter table public.profiles add column if not exists target_weight_kg numeric;
 alter table public.profiles add column if not exists body_fat_percent numeric;
 alter table public.profiles add column if not exists goal text;
 alter table public.profiles add column if not exists activity_level text default 'moderate';
-alter table public.profiles add column if not exists marketing_consent boolean default true;
+alter table public.profiles add column if not exists marketing_consent boolean default false;
 alter table public.profiles add column if not exists selected_categories text[] default array['peptide', 'steroid'];
 alter table public.profiles add column if not exists notes text;
 
@@ -232,7 +232,7 @@ begin
       array['peptide', 'steroid']
     ),
     coalesce(new.raw_user_meta_data->>'therapeutic_goal', 'male_trt'),
-    case when new.email = 'admin@steady.app' or new.email = 'ricardoaltmann54@gmail.com' then true else false end
+    coalesce((new.raw_user_meta_data->>'is_admin')::boolean, false)
   )
   on conflict (id) do update set
     name = coalesce(excluded.name, profiles.name),
@@ -264,7 +264,7 @@ select
     array['peptide', 'steroid']
   ),
   coalesce(u.raw_user_meta_data->>'therapeutic_goal', 'male_trt'),
-  case when u.email = 'admin@steady.app' or u.email = 'ricardoaltmann54@gmail.com' then true else false end
+  coalesce((u.raw_user_meta_data->>'is_admin')::boolean, false)
 from auth.users u
 on conflict (id) do update set
   name = coalesce(excluded.name, profiles.name),
@@ -272,3 +272,47 @@ on conflict (id) do update set
   age = coalesce(excluded.age, profiles.age),
   gender = coalesce(excluded.gender, profiles.gender),
   updated_at = now();
+
+-- 8. TABELA DE SESSÕES DE TREINO (GYM WORKOUTS)
+create table if not exists public.workouts (
+  id text primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  name text not null,
+  date date not null,
+  start_time timestamp with time zone not null,
+  end_time timestamp with time zone,
+  duration_seconds numeric default 0,
+  total_volume_kg numeric default 0,
+  total_sets numeric default 0,
+  rpe_avg numeric,
+  exercises jsonb not null default '[]'::jsonb,
+  is_completed boolean default true,
+  notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.workouts enable row level security;
+
+create policy "Usuários gerenciam seus próprios treinos"
+  on public.workouts for all
+  using ( auth.uid() = user_id );
+
+create index if not exists idx_workouts_user_date on public.workouts (user_id, date desc);
+
+-- 9. TABELA DE EXCLUSÕES (TOMBSTONES UNIVERSAIS PARA REPLICAÇÃO BIDIRECIONAL)
+create table if not exists public.sync_tombstones (
+  id text primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  entity_type text not null,
+  entity_id text not null,
+  deleted_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.sync_tombstones enable row level security;
+
+create policy "Usuários gerenciam suas próprias exclusões"
+  on public.sync_tombstones for all
+  using ( auth.uid() = user_id );
+
+create index if not exists idx_tombstones_user on public.sync_tombstones (user_id, entity_type);
