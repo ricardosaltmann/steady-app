@@ -8,6 +8,7 @@ interface HealthConnectNativePlugin {
   openHealthConnectSettings(): Promise<void>;
   readRecords(options: { type: string; timeRangeFilter: { type?: string; startTime: string; endTime: string } }): Promise<any>;
   readAllHealthMetrics(options: { timeRangeFilter: { type?: string; startTime: string; endTime: string } }): Promise<ProviderMetricsPayload>;
+  writeExerciseSession(options: { title: string; startTime: string; endTime: string; notes?: string }): Promise<{ success: boolean; recordIds?: string[] }>;
 }
 
 export const NativeHealthConnect = registerPlugin<HealthConnectNativePlugin>('HealthConnect');
@@ -22,6 +23,8 @@ export const ALL_HEALTH_CONNECT_PERMISSIONS = [
   'heartRate',
   'hydration',
   'history',
+  'exerciseRead',
+  'exerciseWrite',
 ];
 
 export class HealthConnectProvider implements HealthDataProvider {
@@ -89,6 +92,27 @@ export class HealthConnectProvider implements HealthDataProvider {
     } catch (err) {
       console.error('[HealthConnectProvider] Erro na leitura de métricas:', err);
       return {};
+    }
+  }
+
+  async writeExerciseSession(options: {
+    title: string;
+    startTime: string;
+    endTime: string;
+    notes?: string;
+  }): Promise<{ success: boolean; recordIds?: string[] }> {
+    if (!Capacitor.isNativePlatform()) {
+      return { success: false };
+    }
+    try {
+      if (typeof NativeHealthConnect.writeExerciseSession === 'function') {
+        const result = await NativeHealthConnect.writeExerciseSession(options);
+        return result;
+      }
+      return { success: false };
+    } catch (err) {
+      console.error('[HealthConnectProvider] Erro ao gravar treino:', err);
+      return { success: false };
     }
   }
 }

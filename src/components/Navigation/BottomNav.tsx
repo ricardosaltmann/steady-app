@@ -22,25 +22,25 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onChangeTab,
   onOpenQuickAction,
 }) => {
-  const isPharmaActive = currentTab === 'chart' || currentTab === 'injections' || currentTab === 'protocols' || currentTab === 'calc';
-  const isHealthActive = currentTab === 'symptoms' || currentTab === 'labs';
+  const isPharmaActive = ['chart', 'injections', 'protocols', 'calc'].includes(currentTab);
+  const isHealthActive = ['symptoms', 'labs'].includes(currentTab);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/80 px-2 pt-1.5 pb-2 safe-area-bottom shadow-2xl">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#0c0e14]/95 backdrop-blur-2xl border-t border-white/[0.08] px-2 pt-1.5 pb-2 safe-area-bottom shadow-2xl">
       <div className="max-w-md mx-auto flex items-center justify-around relative">
         {/* TAB 1: HOJE */}
         <button
           type="button"
           onClick={() => onChangeTab('today')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 ${
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 cursor-pointer ${
             currentTab === 'today'
-              ? 'text-cyan-400 font-bold'
+              ? 'text-[#ccff00] font-black'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div
             className={`p-1.5 rounded-xl transition-all ${
-              currentTab === 'today' ? 'bg-cyan-500/20 ring-1 ring-cyan-500/40 scale-105' : ''
+              currentTab === 'today' ? 'bg-[#ccff00]/15 ring-1 ring-[#ccff00]/30 scale-105' : ''
             }`}
           >
             <Home className="w-5 h-5 shrink-0" />
@@ -52,15 +52,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           type="button"
           onClick={() => onChangeTab('gym')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 ${
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 cursor-pointer ${
             currentTab === 'gym'
-              ? 'text-cyan-400 font-bold'
+              ? 'text-[#ccff00] font-black'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div
             className={`p-1.5 rounded-xl transition-all ${
-              currentTab === 'gym' ? 'bg-cyan-500/20 ring-1 ring-cyan-500/40 scale-105' : ''
+              currentTab === 'gym' ? 'bg-[#ccff00]/15 ring-1 ring-[#ccff00]/30 scale-105' : ''
             }`}
           >
             <Dumbbell className="w-5 h-5 shrink-0" />
@@ -73,7 +73,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <button
             type="button"
             onClick={onOpenQuickAction}
-            className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-emerald-400 text-slate-950 flex items-center justify-center shadow-lg shadow-cyan-500/30 hover:scale-110 active:scale-95 transition-all border-2 border-slate-950 cursor-pointer"
+            className="w-12 h-12 rounded-2xl bg-[#ccff00] text-black flex items-center justify-center shadow-lg shadow-[#ccff00]/25 hover:scale-110 active:scale-95 transition-all border-2 border-[#0c0e14] cursor-pointer"
             title="Ação Rápida (+)"
           >
             <Plus className="w-6 h-6 stroke-[3]" />
@@ -84,15 +84,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <button
           type="button"
           onClick={() => onChangeTab('chart')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 ${
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 cursor-pointer ${
             isPharmaActive
-              ? 'text-cyan-400 font-bold'
+              ? 'text-[#ccff00] font-black'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div
             className={`p-1.5 rounded-xl transition-all ${
-              isPharmaActive ? 'bg-cyan-500/20 ring-1 ring-cyan-500/40 scale-105' : ''
+              isPharmaActive ? 'bg-[#ccff00]/15 ring-1 ring-[#ccff00]/30 scale-105' : ''
             }`}
           >
             <Activity className="w-5 h-5 shrink-0" />
@@ -100,19 +100,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <span className="text-[10px] mt-0.5 tracking-tight font-medium">Farmaco</span>
         </button>
 
-        {/* TAB 4: SAÚDE & PESO */}
+        {/* TAB 4: SAÚDE & LABS */}
         <button
           type="button"
           onClick={() => onChangeTab('symptoms')}
-          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 ${
+          className={`flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all flex-1 cursor-pointer ${
             isHealthActive
-              ? 'text-cyan-400 font-bold'
+              ? 'text-[#ccff00] font-black'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <div
             className={`p-1.5 rounded-xl transition-all ${
-              isHealthActive ? 'bg-cyan-500/20 ring-1 ring-cyan-500/40 scale-105' : ''
+              isHealthActive ? 'bg-[#ccff00]/15 ring-1 ring-[#ccff00]/30 scale-105' : ''
             }`}
           >
             <Scale className="w-5 h-5 shrink-0" />

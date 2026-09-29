@@ -1,4 +1,4 @@
-import { Protocol } from '../types';
+import { Protocol, NotificationSettings } from '../types';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 

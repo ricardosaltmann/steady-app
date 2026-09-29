@@ -10,6 +10,7 @@ import {
 import { requestWakeLock, releaseWakeLock } from '../domain/gym/wakelock';
 import { playNotificationSound } from '../lib/notifications';
 import { calculateNextProgression, STARTER_ROUTINES } from '../domain/gym';
+import { healthConnectProvider } from '../lib/health/HealthConnectProvider';
 
 interface RestTimerState {
   active: boolean;
@@ -219,6 +220,16 @@ export const useWorkoutStore = create<WorkoutStoreState>((set, get) => ({
     } catch {
       // ignore
     }
+
+    // Sync workout session to Health Connect (Android / Google Health / Samsung Health)
+    healthConnectProvider.writeExerciseSession({
+      title: completedSession.name || 'Treino SteadySync',
+      startTime: session.startTime,
+      endTime: nowIso,
+      notes: `Volume: ${Math.round(totalVolumeKg)}kg | Séries concluídas: ${totalCompletedSets}`,
+    }).catch(err => {
+      console.warn('[WorkoutStore] Falha ao sincronizar com Health Connect:', err);
+    });
 
     playNotificationSound();
     return completedSession;

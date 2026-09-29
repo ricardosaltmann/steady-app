@@ -38,6 +38,7 @@ export interface ProviderMetricsPayload {
   sleep?: RawHealthMetricItem[];
   heartRates?: RawHealthMetricItem[];
   hydration?: RawHealthMetricItem[];
+  exercises?: any[];
 }
 
 export interface HealthDataProvider {

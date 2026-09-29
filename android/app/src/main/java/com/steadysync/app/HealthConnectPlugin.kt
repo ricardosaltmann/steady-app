@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -35,6 +36,8 @@ import java.time.Instant
         Permission(alias = "sleep", strings = ["android.permission.health.READ_SLEEP"]),
         Permission(alias = "heartRate", strings = ["android.permission.health.READ_HEART_RATE"]),
         Permission(alias = "hydration", strings = ["android.permission.health.READ_HYDRATION"]),
+        Permission(alias = "exerciseRead", strings = ["android.permission.health.READ_EXERCISE"]),
+        Permission(alias = "exerciseWrite", strings = ["android.permission.health.WRITE_EXERCISE"]),
         Permission(alias = "history", strings = ["android.permission.health.READ_HEALTH_DATA_HISTORY"])
     ]
 )
@@ -205,6 +208,30 @@ class HealthConnectPlugin : Plugin() {
                             }
                         } catch (e: Exception) {
                             Log.w(TAG, "Falha ao ler Hydration: ${e.message}")
+                        }
+                    }
+                    type.equals("Exercise", ignoreCase = true) || type.equals("ExerciseSession", ignoreCase = true) -> {
+                        try {
+                            val req = ReadRecordsRequest(
+                                recordType = ExerciseSessionRecord::class,
+                                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                            )
+                            val res = client.readRecords(req)
+                            for (rec in res.records) {
+                                val item = JSObject()
+                                item.put("startTime", rec.startTime.toString())
+                                item.put("endTime", rec.endTime.toString())
+                                item.put("title", rec.title ?: "Treino")
+                                item.put("notes", rec.notes ?: "")
+                                item.put("exerciseType", rec.exerciseType)
+                                val durationMinutes = Duration.between(rec.startTime, rec.endTime).toMinutes()
+                                item.put("durationMinutes", durationMinutes)
+                                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                                item.put("recordId", rec.metadata.id)
+                                recordsArray.put(item)
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Falha ao ler ExerciseSession: ${e.message}")
                         }
                     }
                     else -> {
@@ -438,6 +465,30 @@ class HealthConnectPlugin : Plugin() {
             Log.w(TAG, "Não foi possível ler BloodGlucoseRecord: ${e.message}")
         }
 
+        // 8. ExerciseSessionRecord
+        val exercisesArray = JSArray()
+        try {
+            val exReq = ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            val exRes = client.readRecords(exReq)
+            for (rec in exRes.records) {
+                val item = JSObject()
+                item.put("startTime", rec.startTime.toString())
+                item.put("endTime", rec.endTime.toString())
+                item.put("title", rec.title ?: "Treino")
+                item.put("notes", rec.notes ?: "")
+                item.put("exerciseType", rec.exerciseType)
+                item.put("durationMinutes", Duration.between(rec.startTime, rec.endTime).toMinutes())
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
+                exercisesArray.put(item)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Não foi possível ler ExerciseSessionRecord: ${e.message}")
+        }
+
         ret.put("weights", weightsArray)
         ret.put("records", weightsArray) // Retrocompatibilidade direta
         ret.put("bodyFat", bodyFatArray)
@@ -446,5 +497,41 @@ class HealthConnectPlugin : Plugin() {
         ret.put("sleep", sleepArray)
         ret.put("heartRates", heartRateArray)
         ret.put("hydration", hydrationArray)
+        ret.put("exercises", exercisesArray)
+    }
+
+    @PluginMethod
+    fun writeExerciseSession(call: PluginCall) {
+        try {
+            val client = HealthConnectClient.getOrCreate(context)
+            val title = call.getString("title", "Treino SteadySync") ?: "Treino SteadySync"
+            val startTimeStr = call.getString("startTime") ?: return call.reject("startTime é obrigatório")
+            val endTimeStr = call.getString("endTime") ?: return call.reject("endTime é obrigatório")
+            val notes = call.getString("notes", "")
+
+            val startTime = Instant.parse(startTimeStr)
+            val endTime = Instant.parse(endTimeStr)
+
+            val sessionRecord = ExerciseSessionRecord(
+                startTime = startTime,
+                startZoneOffset = null,
+                endTime = endTime,
+                endZoneOffset = null,
+                exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
+                title = title,
+                notes = notes
+            )
+
+            runBlocking {
+                val response = client.insertRecords(listOf(sessionRecord))
+                val res = JSObject()
+                res.put("success", true)
+                res.put("recordIds", JSArray(response.recordIdsList))
+                call.resolve(res)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao gravar treino no Health Connect", e)
+            call.reject("Erro ao gravar treino: " + e.message, e)
+        }
     }
 }

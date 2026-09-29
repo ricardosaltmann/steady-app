@@ -28,6 +28,7 @@ import { NotificationModal } from './components/Notifications/NotificationModal'
 import { TodayView } from './components/Home/TodayView';
 import { RoutineManager, ActiveWorkoutModal, RestTimerFloating } from './components/Gym';
 import { QuickActionModal } from './components/Navigation/QuickActionModal';
+import { HubSubNav } from './components/Navigation/HubSubNav';
 import { WeightModal, WeightFormData } from './components/Symptoms/WeightModal';
 import { useWorkoutStore } from './store/useWorkoutStore';
 import { ChevronRight, Heart } from 'lucide-react';
@@ -295,7 +296,7 @@ export function App() {
     setIsWeightModalOpen(false);
   };
 
-  const handleQuickActionSelect = (action: 'injection' | 'workout' | 'water' | 'weight' | 'symptom') => {
+  const handleQuickActionSelect = (action: 'injection' | 'workout' | 'water' | 'weight' | 'symptom' | 'calc' | 'lab') => {
     setIsQuickActionOpen(false);
     switch (action) {
       case 'injection':
@@ -319,6 +320,12 @@ export function App() {
         break;
       case 'symptom':
         setCurrentTab('symptoms');
+        break;
+      case 'calc':
+        setCurrentTab('calc');
+        break;
+      case 'lab':
+        setCurrentTab('labs');
         break;
     }
   };
@@ -465,6 +472,9 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-36 sm:pb-32 space-y-6">
+        {/* Hub Sub-navigation pills (Pharma: Curva, Aplicações, Protocolos, Calc | Saúde: Sintomas, Labs) */}
+        <HubSubNav currentTab={currentTab} onChangeTab={setCurrentTab} />
+
         {/* TAB 0: TELA HOJE (COCKPIT DIÁRIO UNIFICADO) */}
         {currentTab === 'today' && (
           <TodayView

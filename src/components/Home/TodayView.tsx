@@ -23,7 +23,12 @@ import {
   Sparkles,
   ArrowRight,
   TrendingUp,
+  Calculator,
+  TestTube2,
+  Activity,
+  Layers,
 } from 'lucide-react';
+import { NavTab } from '../Navigation/BottomNav';
 
 interface TodayViewProps {
   protocols: Protocol[];
@@ -39,7 +44,7 @@ interface TodayViewProps {
   onOpenWaterModal: () => void;
   onAddWaterQuick: (amountMl: number) => void;
   onOpenWeightModal: () => void;
-  onNavigateTab: (tab: any) => void;
+  onNavigateTab: (tab: NavTab) => void;
 }
 
 export const TodayView: React.FC<TodayViewProps> = ({
@@ -67,7 +72,6 @@ export const TodayView: React.FC<TodayViewProps> = ({
   const todayInjections = injections.filter(inj => inj.date.startsWith(todayStr));
 
   // 2. Identify workout for today
-  // If a routine has targetWeekday === currentWeekday, it's today's scheduled routine
   const todayRoutine = routines.find(r => r.active && r.targetWeekday === currentWeekday) || routines[0];
 
   // 3. Weekly Strip (7 days: Mon-Sun)
@@ -98,7 +102,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
       {/* Greeting & Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-[#ccff00] font-black">
             {formatDisplayDate(todayStr)}
           </span>
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
@@ -107,25 +111,25 @@ export const TodayView: React.FC<TodayViewProps> = ({
         </div>
 
         {/* Quick status pill */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Fase Ativa</span>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-slate-300">
+          <div className="w-2 h-2 rounded-full bg-[#ccff00] shadow-[0_0_8px_#ccff00]" />
+          <span className="font-semibold text-[11px]">Sincronizado</span>
         </div>
       </div>
 
       {/* 7-Day Horizontal Week Strip */}
-      <div className="bg-slate-900/90 border border-slate-800/80 rounded-3xl p-3.5 shadow-xl">
+      <div className="bg-[#10121a]/90 border border-white/[0.08] rounded-3xl p-3.5 shadow-xl backdrop-blur-xl">
         <div className="flex items-center justify-between gap-1 sm:gap-2">
           {weekDays.map(item => (
             <div
               key={item.iso}
               className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-2xl transition-all ${
                 item.isToday
-                  ? 'bg-gradient-to-b from-cyan-500/20 to-blue-600/30 border border-cyan-500/50 shadow-lg shadow-cyan-950/40 scale-105'
-                  : 'hover:bg-slate-800/50'
+                  ? 'bg-white/[0.08] border border-[#ccff00]/60 shadow-lg shadow-[#ccff00]/10 scale-105'
+                  : 'hover:bg-white/[0.03]'
               }`}
             >
-              <span className={`text-[10px] font-bold ${item.isToday ? 'text-cyan-400' : 'text-slate-400'}`}>
+              <span className={`text-[10px] font-bold ${item.isToday ? 'text-[#ccff00]' : 'text-slate-400'}`}>
                 {item.dayLetter}
               </span>
               <span className={`text-sm font-black my-0.5 ${item.isToday ? 'text-white' : 'text-slate-200'}`}>
@@ -134,9 +138,9 @@ export const TodayView: React.FC<TodayViewProps> = ({
               <div
                 className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
                   item.hasInj
-                    ? 'bg-cyan-400 shadow-sm shadow-cyan-400/80'
+                    ? 'bg-[#ccff00] shadow-sm shadow-[#ccff00]'
                     : item.isToday
-                    ? 'bg-cyan-500/40'
+                    ? 'bg-[#ccff00]/40'
                     : 'bg-transparent'
                 }`}
               />
@@ -148,17 +152,15 @@ export const TodayView: React.FC<TodayViewProps> = ({
       {/* Core Action Cards: Medication Dose & Workout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* CARD 1: MEDICATION DOSE OF TODAY */}
-        <div className="bg-slate-900/90 border border-slate-800/90 hover:border-cyan-500/40 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-4 transition-all relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
-
+        <div className="bg-[#10121a]/90 border border-white/[0.08] hover:border-white/[0.18] rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-4 transition-all relative overflow-hidden group">
           <div className="space-y-3 relative z-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-cyan-600/20 text-cyan-400 border border-cyan-500/30">
+                <div className="p-2 rounded-xl bg-white/[0.06] text-[#ccff00] border border-white/[0.08]">
                   <Syringe className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Aplicação & Protocolo
                   </h3>
                   <span className="text-base font-black text-white">Dose de Hoje</span>
@@ -180,11 +182,11 @@ export const TodayView: React.FC<TodayViewProps> = ({
                   return (
                     <div
                       key={proto.id}
-                      className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center justify-between gap-3"
+                      className="p-3.5 rounded-2xl bg-black/40 border border-white/[0.06] flex items-center justify-between gap-3"
                     >
                       <div>
                         <div className="text-sm font-black text-white">{proto.name}</div>
-                        <div className="text-xs text-cyan-400 font-semibold mt-0.5">
+                        <div className="text-xs text-[#ccff00] font-semibold mt-0.5">
                           {proto.dose} {comp?.unit || 'mg'} • {proto.route}
                         </div>
                       </div>
@@ -197,196 +199,220 @@ export const TodayView: React.FC<TodayViewProps> = ({
                         <button
                           type="button"
                           onClick={() => onOpenNewInjection(proto)}
-                          className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-xs transition-all shadow-md shadow-cyan-950/50 cursor-pointer"
+                          className="px-3.5 py-1.5 rounded-xl bg-[#ccff00] hover:bg-[#bfe600] text-black text-xs font-black transition-all cursor-pointer shadow-sm"
                         >
-                          Tomar Dose
+                          Aplicar
                         </button>
                       )}
                     </div>
                   );
                 })}
               </div>
-            ) : todayInjections.length > 0 ? (
-              <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-800/40 text-xs text-emerald-300">
-                Você já registrou {todayInjections.length} aplicação(ões) hoje. Seus níveis séricos estão projetados!
-              </div>
             ) : (
-              <div className="p-3.5 rounded-2xl bg-slate-950/50 border border-slate-800/60 text-xs text-slate-400 flex items-center justify-between">
-                <span>Nenhuma dose obrigatória programada para hoje.</span>
-                <button
-                  type="button"
-                  onClick={() => onOpenNewInjection()}
-                  className="text-cyan-400 hover:text-cyan-300 font-bold"
-                >
-                  + Dose Extra
-                </button>
+              <div className="p-4 rounded-2xl bg-black/30 border border-white/[0.04] text-center space-y-1">
+                <span className="text-xs font-semibold text-slate-300 block">
+                  Nenhuma dose agendada para hoje
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Seus protocolos ativos estão em dia e equilibrados.
+                </span>
               </div>
             )}
           </div>
 
-          <div className="pt-1 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-            <span>Farmacocinética Estável</span>
+          {/* Bottom Card Actions */}
+          <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={() => onNavigateTab('pharma')}
-              className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
+              onClick={() => onNavigateTab('chart')}
+              className="text-xs text-slate-300 hover:text-white font-bold flex items-center gap-1 transition-colors"
             >
-              Ver Curva <ArrowRight className="w-3.5 h-3.5" />
+              Curva Sérica <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenNewInjection()}
+              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-semibold transition-colors cursor-pointer"
+            >
+              + Outra Aplicação
             </button>
           </div>
         </div>
 
         {/* CARD 2: WORKOUT OF TODAY */}
-        <div className="bg-slate-900/90 border border-slate-800/90 hover:border-emerald-500/40 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-4 transition-all relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-
+        <div className="bg-[#10121a]/90 border border-white/[0.08] hover:border-white/[0.18] rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-4 transition-all relative overflow-hidden group">
           <div className="space-y-3 relative z-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+                <div className="p-2 rounded-xl bg-white/[0.06] text-[#ccff00] border border-white/[0.08]">
                   <Dumbbell className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Treino & Hipertrofia
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Hipertrofia & Sobrecarga
                   </h3>
-                  <span className="text-base font-black text-white">Sessão de Hoje</span>
+                  <span className="text-base font-black text-white">Treino de Hoje</span>
                 </div>
               </div>
 
-              {activeSession && (
-                <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/60 animate-pulse">
-                  Em Andamento
+              {activeSession ? (
+                <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#ccff00]/15 text-[#ccff00] border border-[#ccff00]/30 animate-pulse">
+                  <Play className="w-3 h-3 fill-current" /> Em Andamento
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400 font-mono">
+                  {todayRoutine ? `${todayRoutine.exercises.length} exercícios` : 'Descanso'}
                 </span>
               )}
             </div>
 
+            {/* If there's an active workout in progress, show quick resume banner */}
             {activeSession ? (
-              <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-800/60 flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-black text-white">{activeSession.name}</div>
-                  <div className="text-xs text-amber-300 mt-0.5">Sessão ativa não finalizada</div>
+              <div className="p-4 rounded-2xl bg-white/[0.04] border border-[#ccff00]/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-white">{activeSession.name}</span>
+                  <span className="text-xs font-mono text-[#ccff00] font-bold">
+                    {activeSession.exercises.reduce(
+                      (acc, ex) => acc + ex.sets.filter(s => s.completed).length,
+                      0
+                    )}{' '}
+                    séries feitas
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={onResumeWorkout}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-all shadow-md shadow-amber-950/60"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#ccff00] hover:bg-[#bfe600] text-black font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
-                  Retomar Treino
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Continuar Treino Ativo</span>
                 </button>
               </div>
             ) : todayRoutine ? (
-              <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{todayRoutine.emoji || '⚡'}</span>
-                    <span className="text-sm font-black text-white truncate">{todayRoutine.name}</span>
+              <div className="space-y-2.5">
+                <div className="p-3.5 rounded-2xl bg-black/40 border border-white/[0.06] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                      <span>{todayRoutine.emoji || '⚡'}</span>
+                      {todayRoutine.name}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Sugerido
+                    </span>
                   </div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {todayRoutine.exercises.length} exercícios programados
-                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {todayRoutine.description}
+                  </p>
                 </div>
+
                 <button
                   type="button"
                   onClick={() => onStartWorkout(todayRoutine)}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs transition-all shadow-md shadow-emerald-950/50 flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#ccff00] hover:bg-[#bfe600] text-black font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" /> Iniciar
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Iniciar Sessão Agora</span>
                 </button>
               </div>
             ) : (
-              <div className="p-3.5 rounded-2xl bg-slate-950/50 border border-slate-800/60 text-xs text-slate-400 flex items-center justify-between">
-                <span>Dia livre de treino. Descanse ou faça uma sessão livre.</span>
-                <button
-                  type="button"
-                  onClick={() => onStartWorkout()}
-                  className="text-emerald-400 hover:text-emerald-300 font-bold"
-                >
-                  + Treino Livre
-                </button>
+              <div className="p-4 rounded-2xl bg-black/30 border border-white/[0.04] text-center space-y-1">
+                <span className="text-xs font-semibold text-slate-300 block">
+                  Dia de Descanso / Recuperação Ativa
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Foque em hidratação, nutrição e sono anabólico.
+                </span>
               </div>
             )}
           </div>
 
-          <div className="pt-1 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-            <span>Periodização Semanal</span>
+          {/* Bottom Card Actions */}
+          <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs">
             <button
               type="button"
               onClick={() => onNavigateTab('gym')}
-              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+              className="text-xs text-slate-300 hover:text-white font-bold flex items-center gap-1 transition-colors"
             >
-              Ver Rotinas <ArrowRight className="w-3.5 h-3.5" />
+              Ver Todas Rotinas <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onStartWorkout()}
+              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-semibold transition-colors cursor-pointer"
+            >
+              Treino Livre
             </button>
           </div>
         </div>
       </div>
 
-      {/* Support Cards: Water & Body Weight */}
+      {/* Secondary Cards: Water & Weight */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* WATER CARD */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-3">
+        {/* WATER TRACKING CARD */}
+        <div className="bg-[#10121a]/90 border border-white/[0.08] rounded-3xl p-5 shadow-xl space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+            <div className="flex items-center gap-2 text-sky-400">
+              <div className="p-1.5 rounded-xl bg-sky-500/15 text-sky-400 border border-sky-500/30">
                 <Droplets className="w-4 h-4" />
               </div>
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Hidratação Celular
+                Hidratação Diária
               </span>
             </div>
             <button
               type="button"
               onClick={onOpenWaterModal}
-              className="text-xs text-blue-400 hover:text-blue-300 font-bold"
+              className="text-xs text-sky-400 hover:text-sky-300 font-bold"
             >
-              Ajustar Meta
+              Histórico & Alertas
             </button>
           </div>
 
           <div className="flex items-baseline justify-between">
             <div>
-              <span className="text-2xl font-black text-white">{waterData.totalMl}</span>
-              <span className="text-xs text-slate-400 ml-1.5">/ {waterData.targetMl} ml</span>
+              <span className="text-2xl font-black text-white font-mono">{waterData.totalMl}</span>
+              <span className="text-xs text-slate-400 ml-1">/ {waterData.targetMl} ml</span>
             </div>
-            <span className="text-xs font-bold text-blue-400">
+            <span className="text-xs font-mono font-bold text-sky-400">
               {Math.min(100, Math.round((waterData.totalMl / (waterData.targetMl || 2500)) * 100))}%
             </span>
           </div>
 
-          {/* Progress bar */}
-          <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+          {/* Progress Bar */}
+          <div className="w-full bg-black/60 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/[0.06]">
             <div
-              className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full transition-all duration-500"
+              className="bg-sky-400 h-full rounded-full transition-all duration-500"
               style={{
-                width: `${Math.min(100, (waterData.totalMl / (waterData.targetMl || 2500)) * 100)}%`,
+                width: `${Math.min(100, Math.round((waterData.totalMl / (waterData.targetMl || 2500)) * 100))}%`,
               }}
             />
           </div>
 
-          {/* Quick buttons */}
-          <div className="flex gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-1">
             <button
               type="button"
               onClick={() => onAddWaterQuick(250)}
-              className="flex-1 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-blue-300 text-xs font-bold border border-slate-800"
+              className="flex-1 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-xs font-bold border border-white/[0.06] transition-all cursor-pointer active:scale-95"
             >
-              +250ml
+              + 250 ml
             </button>
             <button
               type="button"
               onClick={() => onAddWaterQuick(500)}
-              className="flex-1 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-blue-300 text-xs font-bold border border-slate-800"
+              className="flex-1 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-xs font-bold border border-white/[0.06] transition-all cursor-pointer active:scale-95"
             >
-              +500ml
+              + 500 ml
             </button>
           </div>
         </div>
 
-        {/* BODY WEIGHT CARD */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-3">
+        {/* WEIGHT & METRICS CARD */}
+        <div className="bg-[#10121a]/90 border border-white/[0.08] rounded-3xl p-5 shadow-xl space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+            <div className="flex items-center gap-2 text-amber-400">
+              <div className="p-1.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
                 <Scale className="w-4 h-4" />
               </div>
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -396,7 +422,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
             <button
               type="button"
               onClick={onOpenWeightModal}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
+              className="text-xs text-amber-400 hover:text-amber-300 font-bold"
             >
               + Registrar Peso
             </button>
@@ -404,36 +430,97 @@ export const TodayView: React.FC<TodayViewProps> = ({
 
           <div className="flex items-baseline justify-between">
             <div>
-              <span className="text-2xl font-black text-white">
+              <span className="text-2xl font-black text-white font-mono">
                 {profile?.weightKg ? `${profile.weightKg} kg` : 'Sem registro'}
               </span>
               {profile?.heightCm && profile?.weightKg && (
-                <span className="text-xs text-slate-400 ml-2">
+                <span className="text-xs text-slate-400 ml-2 font-mono">
                   IMC: {(profile.weightKg / Math.pow(profile.heightCm / 100, 2)).toFixed(1)}
                 </span>
               )}
             </div>
 
             {profile?.targetWeightKg && (
-              <span className="text-xs font-bold text-amber-400">
+              <span className="text-xs font-mono font-bold text-amber-400">
                 Meta: {profile.targetWeightKg} kg
               </span>
             )}
           </div>
 
           <div className="text-[11px] text-slate-400 leading-relaxed">
-            Mantenha suas pesagens matinais em jejum para correlação precisa com a farmacocinética e retenção hídrica.
+            Pesagens matinais em jejum mantêm o cálculo de IMC e sobrecarga de cargas precisos.
           </div>
 
           <div className="pt-1">
             <button
               type="button"
-              onClick={() => onNavigateTab('health')}
-              className="w-full py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-indigo-300 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"
+              onClick={() => onNavigateTab('symptoms')}
+              className="w-full py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-xs font-bold border border-white/[0.06] flex items-center justify-center gap-1 cursor-pointer transition-colors"
             >
               Ver Histórico & Sintomas <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* QUICK CLINICAL & PHARMACEUTICAL TOOLS GRID */}
+      <div className="space-y-3 pt-2">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 px-1">
+          <Activity className="w-4 h-4 text-[#ccff00]" />
+          Ferramentas Clínicas & Módulos
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Tool 1: Calculadora de Peptídeos */}
+          <button
+            type="button"
+            onClick={() => onNavigateTab('calc')}
+            className="p-4 rounded-2xl bg-[#10121a]/90 hover:bg-[#141722] border border-white/[0.08] hover:border-cyan-500/40 text-left transition-all group cursor-pointer shadow-lg"
+          >
+            <div className="p-2 rounded-xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 w-fit mb-3">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">
+              Calculadora de Peptídeos
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+              Diluição em mcg/UI, reconstituição e seringas de insulina (modelo Cellgenic).
+            </div>
+          </button>
+
+          {/* Tool 2: Exames de Sangue */}
+          <button
+            type="button"
+            onClick={() => onNavigateTab('labs')}
+            className="p-4 rounded-2xl bg-[#10121a]/90 hover:bg-[#141722] border border-white/[0.08] hover:border-purple-500/40 text-left transition-all group cursor-pointer shadow-lg"
+          >
+            <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 w-fit mb-3">
+              <TestTube2 className="w-5 h-5" />
+            </div>
+            <div className="text-sm font-bold text-white group-hover:text-purple-400 transition-colors">
+              Exames Laboratoriais
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+              Testosterona, estradiol, prolactina, hemograma e marcadores hepáticos.
+            </div>
+          </button>
+
+          {/* Tool 3: Guia de Rotação & Mapa Anatômico */}
+          <button
+            type="button"
+            onClick={() => onNavigateTab('injections')}
+            className="p-4 rounded-2xl bg-[#10121a]/90 hover:bg-[#141722] border border-white/[0.08] hover:border-[#ccff00]/40 text-left transition-all group cursor-pointer shadow-lg"
+          >
+            <div className="p-2 rounded-xl bg-[#ccff00]/15 text-[#ccff00] border border-[#ccff00]/30 w-fit mb-3">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div className="text-sm font-bold text-white group-hover:text-[#ccff00] transition-colors">
+              Aplicações & Rotação 3D
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+              Mapa anatômico de locais e descanso tecidual contra fibrose.
+            </div>
+          </button>
         </div>
       </div>
     </div>
