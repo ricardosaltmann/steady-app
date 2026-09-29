@@ -25,6 +25,11 @@ import { AdminPanel } from './components/Admin/AdminPanel';
 import { WaterCard } from './components/Water/WaterCard';
 import { WaterModal } from './components/Water/WaterModal';
 import { NotificationModal } from './components/Notifications/NotificationModal';
+import { TodayView } from './components/Home/TodayView';
+import { RoutineManager, ActiveWorkoutModal, RestTimerFloating } from './components/Gym';
+import { QuickActionModal } from './components/Navigation/QuickActionModal';
+import { WeightModal, WeightFormData } from './components/Symptoms/WeightModal';
+import { useWorkoutStore } from './store/useWorkoutStore';
 import { ChevronRight, Heart } from 'lucide-react';
 
 export function App() {
@@ -40,7 +45,7 @@ export function App() {
   const [waterData, setWaterData] = useState<DailyWaterData>(() => storage.getWaterData());
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() => storage.getNotificationSettings());
 
-  const [currentTab, setCurrentTab] = useState<NavTab>('chart');
+  const [currentTab, setCurrentTab] = useState<NavTab>('today');
   const [isInjectionModalOpen, setIsInjectionModalOpen] = useState(false);
   const [quickLogProtocol, setQuickLogProtocol] = useState<Protocol | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -48,6 +53,17 @@ export function App() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [isActiveWorkoutOpen, setIsActiveWorkoutOpen] = useState(false);
+  const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
+  const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+
+  const {
+    activeSession,
+    routines,
+    startWorkout,
+    resumeWorkout,
+    loadInitialGymData,
+  } = useWorkoutStore();
 
   // Load data for active user (single unified call per session)
   const loadAllData = useCallback((targetUserId?: string) => {
@@ -105,12 +121,13 @@ export function App() {
   useEffect(() => {
     if (currentUser?.id) {
       loadAllData(currentUser.id);
+      loadInitialGymData(currentUser.id);
       syncEngine.init(currentUser.id);
     }
     return () => {
       syncEngine.stop();
     };
-  }, [currentUser?.id, loadAllData]);
+  }, [currentUser?.id, loadAllData, loadInitialGymData]);
 
   // Hook for background medication and hydration reminders
   useReminders({
@@ -256,6 +273,56 @@ export function App() {
     }
   };
 
+  const handleSaveWeightFromModal = (data: WeightFormData) => {
+    const existingForDate = symptoms.find(s => s.date === data.date);
+    const newLog: SymptomLog = {
+      id: existingForDate?.id || ('symp_' + Date.now()),
+      date: data.date,
+      ...(existingForDate || {}),
+      weightKg: data.weightKg,
+      waistCm: data.waistCm ?? existingForDate?.waistCm,
+      hipCm: data.hipCm ?? existingForDate?.hipCm,
+      armCm: data.armCm ?? existingForDate?.armCm,
+      thighCm: data.thighCm ?? existingForDate?.thighCm,
+      bodyFatPercent: data.bodyFatPercent ?? existingForDate?.bodyFatPercent,
+      notes: data.notes || existingForDate?.notes || undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    handleSaveSymptom(newLog);
+    if (data.heightCm && profile) {
+      handleSaveProfile({ ...profile, heightCm: data.heightCm, weightKg: data.weightKg });
+    }
+    setIsWeightModalOpen(false);
+  };
+
+  const handleQuickActionSelect = (action: 'injection' | 'workout' | 'water' | 'weight' | 'symptom') => {
+    setIsQuickActionOpen(false);
+    switch (action) {
+      case 'injection':
+        setIsInjectionModalOpen(true);
+        break;
+      case 'workout':
+        if (activeSession) {
+          setIsActiveWorkoutOpen(true);
+        } else if (routines.length > 0) {
+          startWorkout(routines[0]);
+          setIsActiveWorkoutOpen(true);
+        } else {
+          setCurrentTab('gym');
+        }
+        break;
+      case 'water':
+        handleAddWater(250);
+        break;
+      case 'weight':
+        setIsWeightModalOpen(true);
+        break;
+      case 'symptom':
+        setCurrentTab('symptoms');
+        break;
+    }
+  };
+
   // Water Handlers
   const handleAddWater = (amountMl: number, targetMl?: number) => {
     const updated = storage.addWaterLog(amountMl, targetMl, undefined, currentUser?.id);
@@ -398,6 +465,45 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-36 sm:pb-32 space-y-6">
+        {/* TAB 0: TELA HOJE (COCKPIT DIÁRIO UNIFICADO) */}
+        {currentTab === 'today' && (
+          <TodayView
+            protocols={protocols}
+            compounds={compounds}
+            injections={injections}
+            waterData={waterData}
+            profile={profile}
+            activeSession={activeSession}
+            routines={routines}
+            onOpenNewInjection={(proto) => {
+              setQuickLogProtocol(proto || null);
+              setIsInjectionModalOpen(true);
+            }}
+            onStartWorkout={(routine) => {
+              startWorkout(routine);
+              setIsActiveWorkoutOpen(true);
+            }}
+            onResumeWorkout={() => {
+              resumeWorkout();
+              setIsActiveWorkoutOpen(true);
+            }}
+            onOpenWaterModal={() => setIsWaterModalOpen(true)}
+            onAddWaterQuick={(amount) => handleAddWater(amount)}
+            onOpenWeightModal={() => setIsWeightModalOpen(true)}
+            onNavigateTab={(tab) => setCurrentTab(tab)}
+          />
+        )}
+
+        {/* TAB GYM: ROTINAS & TREINOS */}
+        {currentTab === 'gym' && (
+          <RoutineManager
+            onStartRoutine={(routine) => {
+              startWorkout(routine);
+              setIsActiveWorkoutOpen(true);
+            }}
+          />
+        )}
+
         {/* TAB 1: DASHBOARD & CURVA */}
         {currentTab === 'chart' && activeCompound && (
           <div className="space-y-6 animate-fadeIn">
@@ -573,7 +679,36 @@ export function App() {
       </main>
 
       {/* Bottom Navigation */}
-      <BottomNav currentTab={currentTab} onChangeTab={setCurrentTab} />
+      <BottomNav
+        currentTab={currentTab}
+        onChangeTab={setCurrentTab}
+        onOpenQuickAction={() => setIsQuickActionOpen(true)}
+      />
+
+      {/* Floating Rest Timer (visible during active workouts or rest periods) */}
+      <RestTimerFloating />
+
+      {/* Active Workout Session Modal */}
+      <ActiveWorkoutModal
+        isOpen={isActiveWorkoutOpen}
+        onClose={() => setIsActiveWorkoutOpen(false)}
+      />
+
+      {/* Quick Action Bottom Sheet */}
+      <QuickActionModal
+        isOpen={isQuickActionOpen}
+        onClose={() => setIsQuickActionOpen(false)}
+        onSelectAction={handleQuickActionSelect}
+      />
+
+      {/* Weight Modal */}
+      <WeightModal
+        isOpen={isWeightModalOpen}
+        onClose={() => setIsWeightModalOpen(false)}
+        onSave={handleSaveWeightFromModal}
+        defaultHeightCm={profile?.heightCm || 175}
+        initialWeight={profile?.weightKg || 80.0}
+      />
 
       {/* Modals */}
       {enabledCompounds.length > 0 && (
