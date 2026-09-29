@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Injection } from '../../types';
 import { INJECTION_SITE_LABELS } from '../../lib/defaultCompounds';
 import { RotateCw, MapPin, Sparkles } from 'lucide-react';
+import { UnifiedAnatomyMap } from '../Anatomy/UnifiedAnatomyMap';
 
 interface BodySiteRotationCardProps {
   injections: Injection[];
@@ -32,6 +33,7 @@ const OPPOSITE_SITES: Record<string, string> = {
 
 export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
   injections,
+  onSelectSiteToInject,
 }) => {
   // Sort injections by date descending (most recent first)
   const sortedInjections = [...injections].sort(
@@ -72,6 +74,8 @@ export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
     ? 'Alternância bilateral para descanso do tecido e absorção ideal.'
     : 'Inicie pelo ventroglúteo ou abdômen para maior conforto e absorção suave.';
 
+  const [showMap, setShowMap] = useState(false);
+
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3.5">
       {/* Header */}
@@ -82,7 +86,13 @@ export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
             Guia de Rotação de Locais
           </h3>
         </div>
-        <span className="text-[11px] text-slate-400">Prevenção de fibrose</span>
+        <button
+          type="button"
+          onClick={() => setShowMap(!showMap)}
+          className="text-xs text-cyan-400 hover:text-cyan-300 font-bold transition-colors"
+        >
+          {showMap ? 'Ocultar Mapa' : 'Ver Mapa 3D'}
+        </button>
       </div>
 
       {/* Top box: Último local utilizado */}
@@ -127,6 +137,17 @@ export const BodySiteRotationCard: React.FC<BodySiteRotationCardProps> = ({
           {rationaleText}
         </p>
       </div>
+
+      {/* Collapsible Anatomical Vector Map */}
+      {showMap && (
+        <div className="pt-2 animate-fadeIn">
+          <UnifiedAnatomyMap
+            mode="injection"
+            injections={injections}
+            onSelectSite={onSelectSiteToInject}
+          />
+        </div>
+      )}
     </div>
   );
 };

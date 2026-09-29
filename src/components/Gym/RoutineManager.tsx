@@ -6,6 +6,7 @@ import {
   Play,
   Dumbbell,
 } from 'lucide-react';
+import { UnifiedAnatomyMap } from '../Anatomy/UnifiedAnatomyMap';
 
 interface RoutineManagerProps {
   onStartRoutine: (routine: Routine) => void;
@@ -117,6 +118,13 @@ export const RoutineManager: React.FC<RoutineManagerProps> = ({ onStartRoutine }
           ))}
         </div>
       </div>
+
+      {/* Muscle Fatigue & Readiness Heatmap */}
+      <UnifiedAnatomyMap
+        mode="fatigue"
+        workoutSessions={history}
+        className="mt-6"
+      />
     </div>
   );
 };
