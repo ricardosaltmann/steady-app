@@ -250,6 +250,26 @@ export interface DailyWaterData {
   entries: WaterLogEntry[];
 }
 
+export type SupplementCategory = 'creatine' | 'whey' | 'vitamin' | 'other';
+
+export interface SupplementItem {
+  id: string;
+  name: string;
+  category: SupplementCategory;
+  targetDose: number;
+  unit: string;
+  takenDose: number;
+  completed: boolean;
+  notes?: string;
+  timeTaken?: string;
+}
+
+export interface DailySupplementData {
+  date: string; // YYYY-MM-DD
+  items: SupplementItem[];
+  streakDays: number;
+}
+
 export interface NotificationSettings {
   medicationReminders: boolean;
   medicationTime: string; // '08:00'

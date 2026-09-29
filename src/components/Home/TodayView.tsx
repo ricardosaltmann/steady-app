@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Protocol,
   Injection,
   DailyWaterData,
+  DailySupplementData,
   UserProfile,
   Routine,
   WorkoutSession,
@@ -29,12 +30,15 @@ import {
   Layers,
 } from 'lucide-react';
 import { NavTab } from '../Navigation/BottomNav';
+import { SupplementCard } from '../Supplements/SupplementCard';
+import { SupplementModal } from '../Supplements/SupplementModal';
 
 interface TodayViewProps {
   protocols: Protocol[];
   compounds: Compound[];
   injections: Injection[];
   waterData: DailyWaterData;
+  supplementData: DailySupplementData;
   profile?: UserProfile | null;
   activeSession: WorkoutSession | null;
   routines: Routine[];
@@ -44,6 +48,9 @@ interface TodayViewProps {
   onOpenWaterModal: () => void;
   onAddWaterQuick: (amountMl: number) => void;
   onOpenWeightModal: () => void;
+  onToggleSupplementItem: (itemId: string) => void;
+  onAddSupplementDose: (itemId: string, amount: number) => void;
+  onSaveSupplementData: (data: DailySupplementData) => void;
   onNavigateTab: (tab: NavTab) => void;
 }
 
@@ -52,6 +59,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
   compounds,
   injections,
   waterData,
+  supplementData,
   profile,
   activeSession,
   routines,
@@ -61,8 +69,12 @@ export const TodayView: React.FC<TodayViewProps> = ({
   onOpenWaterModal,
   onAddWaterQuick,
   onOpenWeightModal,
+  onToggleSupplementItem,
+  onAddSupplementDose,
+  onSaveSupplementData,
   onNavigateTab,
 }) => {
+  const [isSupplementModalOpen, setIsSupplementModalOpen] = useState(false);
   const todayStr = getLocalDateKey();
   const todayDate = new Date();
   const currentWeekday = todayDate.getDay(); // 0 = Sunday ... 6 = Saturday
@@ -348,6 +360,14 @@ export const TodayView: React.FC<TodayViewProps> = ({
         </div>
       </div>
 
+      {/* DAILY SUPPLEMENT STACK CARD (Creatine, Whey, Vitamins) */}
+      <SupplementCard
+        supplementData={supplementData}
+        onToggleItem={onToggleSupplementItem}
+        onAddDose={onAddSupplementDose}
+        onOpenModal={() => setIsSupplementModalOpen(true)}
+      />
+
       {/* Secondary Cards: Water & Weight */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* WATER TRACKING CARD */}
@@ -523,6 +543,14 @@ export const TodayView: React.FC<TodayViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Supplement Modal */}
+      <SupplementModal
+        isOpen={isSupplementModalOpen}
+        onClose={() => setIsSupplementModalOpen(false)}
+        supplementData={supplementData}
+        onSaveData={onSaveSupplementData}
+      />
     </div>
   );
 };

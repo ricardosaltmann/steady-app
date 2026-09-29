@@ -6,7 +6,8 @@ import { auth } from './lib/auth';
 import { getLocalDateKey, getLocalTimeKey } from './lib/dateUtils';
 import { isProtocolDueToday } from './lib/notifications';
 import { formatCompoundDose } from './lib/doseFormatter';
-import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, DailyWaterData, NotificationSettings, UserAccount } from './types';
+import { Compound, Injection, Protocol, LabResult, SymptomLog, UserProfile, DailyWaterData, DailySupplementData, NotificationSettings, UserAccount } from './types';
+import { healthConnectProvider } from './lib/health/HealthConnectProvider';
 import { useAuth } from './hooks/useAuth';
 import { useReminders } from './hooks/useReminders';
 import { AuthScreen } from './components/Auth/AuthScreen';
@@ -44,6 +45,7 @@ export function App() {
   const [symptoms, setSymptoms] = useState<SymptomLog[]>([]);
   const [profile, setProfile] = useState<UserProfile>({ name: '', gender: 'male' });
   const [waterData, setWaterData] = useState<DailyWaterData>(() => storage.getWaterData());
+  const [supplementData, setSupplementData] = useState<DailySupplementData>(() => storage.getSupplementData());
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() => storage.getNotificationSettings());
 
   const [currentTab, setCurrentTab] = useState<NavTab>('today');
@@ -80,6 +82,7 @@ export function App() {
     const loadedProfile = storage.getProfile(uid);
     const activeId = storage.getActiveCompoundId(uid);
     const loadedWater = storage.getWaterData(undefined, uid);
+    const loadedSupplements = storage.getSupplementData(undefined, uid);
     const loadedNotifications = storage.getNotificationSettings(uid);
 
     setCompounds(loadedCompounds);
@@ -89,6 +92,7 @@ export function App() {
     setSymptoms(loadedSymptoms);
     setProfile(loadedProfile);
     setWaterData(loadedWater);
+    setSupplementData(loadedSupplements);
     setNotificationSettings(loadedNotifications);
     
     // Ensure selectedCompoundId exists and is an enabled compound
@@ -364,6 +368,39 @@ export function App() {
     setNotificationSettings(settings);
   };
 
+  // Supplement & Nutrition Handlers (Creatine, Whey, Vitamins)
+  const handleToggleSupplement = (itemId: string) => {
+    const updated = storage.toggleSupplementItem(itemId, undefined, currentUser?.id);
+    setSupplementData(updated);
+
+    // If whey protein completed, dispatch to Health Connect
+    const item = updated.items.find(i => i.id === itemId);
+    if (item && item.category === 'whey' && item.completed) {
+      healthConnectProvider.writeNutritionRecord({
+        name: item.name,
+        proteinGrams: item.takenDose || item.targetDose,
+      }).catch(err => console.warn('[HealthConnect] Erro ao gravar proteína:', err));
+    }
+  };
+
+  const handleAddSupplementDose = (itemId: string, amount: number) => {
+    const updated = storage.addSupplementDose(itemId, amount, undefined, currentUser?.id);
+    setSupplementData(updated);
+
+    const item = updated.items.find(i => i.id === itemId);
+    if (item && item.category === 'whey') {
+      healthConnectProvider.writeNutritionRecord({
+        name: `${item.name} (+${amount}g)`,
+        proteinGrams: amount,
+      }).catch(err => console.warn('[HealthConnect] Erro ao gravar proteína:', err));
+    }
+  };
+
+  const handleSaveSupplementData = (data: DailySupplementData) => {
+    storage.saveSupplementData(data, currentUser?.id);
+    setSupplementData(data);
+  };
+
   // Profile & Compound Handlers
   const handleSaveProfile = (newProfile: UserProfile, updatedAccount?: Partial<UserAccount>) => {
     storage.saveProfile(newProfile, currentUser?.id);
@@ -482,6 +519,7 @@ export function App() {
             compounds={compounds}
             injections={injections}
             waterData={waterData}
+            supplementData={supplementData}
             profile={profile}
             activeSession={activeSession}
             routines={routines}
@@ -500,6 +538,9 @@ export function App() {
             onOpenWaterModal={() => setIsWaterModalOpen(true)}
             onAddWaterQuick={(amount) => handleAddWater(amount)}
             onOpenWeightModal={() => setIsWeightModalOpen(true)}
+            onToggleSupplementItem={handleToggleSupplement}
+            onAddSupplementDose={handleAddSupplementDose}
+            onSaveSupplementData={handleSaveSupplementData}
             onNavigateTab={(tab) => setCurrentTab(tab)}
           />
         )}

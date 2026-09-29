@@ -1,4 +1,4 @@
-import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, DailyActivitySummary, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings } from '../types';
+import { Compound, CompoundCategory, Injection, Protocol, LabResult, SymptomLog, DailyActivitySummary, UserProfile, UserAccount, GoogleHealthSyncConfig, DailyWaterData, WaterLogEntry, NotificationSettings, PrivacySettings, DailySupplementData, SupplementItem } from '../types';
 import { DEFAULT_COMPOUNDS } from './defaultCompounds';
 import { getLocalDateKey } from './dateUtils';
 import { auth } from './auth';
@@ -750,8 +750,184 @@ export const storage = {
     }
   },
 
-  saveNotificationSettings: (settings: NotificationSettings, userId?: string) => {
+    saveNotificationSettings: (settings: NotificationSettings, userId?: string) => {
     const key = getScopedKey('notification_settings', userId);
     localStorage.setItem(key, JSON.stringify(settings));
+  },
+
+  // --- Daily Supplement & Nutrition Tracking (Creatine, Whey, Vitamins) ---
+  getSupplementData: (dateStr?: string, userId?: string): DailySupplementData => {
+    const today = dateStr || getLocalDateKey();
+    const key = getScopedKey(`supplements_${today}`, userId);
+    const raw = localStorage.getItem(key);
+    
+    // Default template items for any new day
+    const defaultItems: SupplementItem[] = [
+      {
+        id: 'supp_creatine',
+        name: 'Creatina Monohidratada',
+        category: 'creatine',
+        targetDose: 5,
+        unit: 'g',
+        takenDose: 0,
+        completed: false,
+        notes: 'Saturação e força celular',
+      },
+      {
+        id: 'supp_whey',
+        name: 'Whey Protein',
+        category: 'whey',
+        targetDose: 30,
+        unit: 'g',
+        takenDose: 0,
+        completed: false,
+        notes: 'Aporte proteico muscular',
+      },
+      {
+        id: 'supp_multivitamin',
+        name: 'Multivitamínico A-Z',
+        category: 'vitamin',
+        targetDose: 1,
+        unit: 'dose',
+        takenDose: 0,
+        completed: false,
+        notes: 'Complexo B, Zinco e Minerais',
+      },
+      {
+        id: 'supp_vitamind3',
+        name: 'Vitamina D3 + K2',
+        category: 'vitamin',
+        targetDose: 5000,
+        unit: 'UI',
+        takenDose: 0,
+        completed: false,
+        notes: 'Imunidade e saúde óssea',
+      },
+      {
+        id: 'supp_omega3',
+        name: 'Ômega 3 (EPA/DHA)',
+        category: 'vitamin',
+        targetDose: 2,
+        unit: 'cáps',
+        takenDose: 0,
+        completed: false,
+        notes: 'Saúde cardiovascular',
+      },
+    ];
+
+    if (!raw) {
+      return {
+        date: today,
+        items: defaultItems,
+        streakDays: storage.calculateSupplementStreak(userId),
+      };
+    }
+
+    try {
+      const parsed: DailySupplementData = JSON.parse(raw);
+      // Merge in any missing default items
+      const existingIds = new Set(parsed.items.map(i => i.id));
+      const missing = defaultItems.filter(d => !existingIds.has(d.id));
+      const mergedItems = [...parsed.items, ...missing];
+      return {
+        ...parsed,
+        items: mergedItems,
+        streakDays: storage.calculateSupplementStreak(userId),
+      };
+    } catch {
+      return {
+        date: today,
+        items: defaultItems,
+        streakDays: storage.calculateSupplementStreak(userId),
+      };
+    }
+  },
+
+  saveSupplementData: (data: DailySupplementData, userId?: string) => {
+    const key = getScopedKey(`supplements_${data.date}`, userId);
+    localStorage.setItem(key, JSON.stringify(data));
+  },
+
+  toggleSupplementItem: (itemId: string, dateStr?: string, userId?: string): DailySupplementData => {
+    const current = storage.getSupplementData(dateStr, userId);
+    const nowTime = new Date().toTimeString().slice(0, 5);
+    const updatedItems = current.items.map(item => {
+      if (item.id === itemId) {
+        const nextCompleted = !item.completed;
+        return {
+          ...item,
+          completed: nextCompleted,
+          takenDose: nextCompleted ? (item.takenDose || item.targetDose) : 0,
+          timeTaken: nextCompleted ? nowTime : undefined,
+        };
+      }
+      return item;
+    });
+
+    const updatedData: DailySupplementData = {
+      ...current,
+      items: updatedItems,
+      streakDays: storage.calculateSupplementStreak(userId),
+    };
+
+    storage.saveSupplementData(updatedData, userId);
+    return updatedData;
+  },
+
+  addSupplementDose: (itemId: string, amount: number, dateStr?: string, userId?: string): DailySupplementData => {
+    const current = storage.getSupplementData(dateStr, userId);
+    const nowTime = new Date().toTimeString().slice(0, 5);
+    const updatedItems = current.items.map(item => {
+      if (item.id === itemId) {
+        const newTaken = (item.takenDose || 0) + amount;
+        return {
+          ...item,
+          takenDose: newTaken,
+          completed: newTaken >= item.targetDose,
+          timeTaken: nowTime,
+        };
+      }
+      return item;
+    });
+
+    const updatedData: DailySupplementData = {
+      ...current,
+      items: updatedItems,
+      streakDays: storage.calculateSupplementStreak(userId),
+    };
+
+    storage.saveSupplementData(updatedData, userId);
+    return updatedData;
+  },
+
+  calculateSupplementStreak: (userId?: string): number => {
+    let streak = 0;
+    const now = new Date();
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      const key = getScopedKey(`supplements_${iso}`, userId);
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        if (i === 0) continue; // Today might not be completed yet
+        break;
+      }
+      try {
+        const parsed: DailySupplementData = JSON.parse(raw);
+        // Considers streak active if at least Creatine or majority of items are completed
+        const creatine = parsed.items.find(item => item.category === 'creatine');
+        const isDayDone = (creatine && creatine.completed) || parsed.items.filter(it => it.completed).length >= 2;
+        if (isDayDone) {
+          streak++;
+        } else {
+          if (i === 0) continue;
+          break;
+        }
+      } catch {
+        break;
+      }
+    }
+    return streak;
   },
 };

@@ -9,9 +9,11 @@ import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.units.Mass
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.getcapacitor.JSArray
@@ -38,6 +40,8 @@ import java.time.Instant
         Permission(alias = "hydration", strings = ["android.permission.health.READ_HYDRATION"]),
         Permission(alias = "exerciseRead", strings = ["android.permission.health.READ_EXERCISE"]),
         Permission(alias = "exerciseWrite", strings = ["android.permission.health.WRITE_EXERCISE"]),
+        Permission(alias = "nutritionRead", strings = ["android.permission.health.READ_NUTRITION"]),
+        Permission(alias = "nutritionWrite", strings = ["android.permission.health.WRITE_NUTRITION"]),
         Permission(alias = "history", strings = ["android.permission.health.READ_HEALTH_DATA_HISTORY"])
     ]
 )
@@ -489,6 +493,28 @@ class HealthConnectPlugin : Plugin() {
             Log.w(TAG, "Não foi possível ler ExerciseSessionRecord: ${e.message}")
         }
 
+        // 9. NutritionRecord (Protein / Suplementação / Whey)
+        val nutritionArray = JSArray()
+        try {
+            val nutReq = ReadRecordsRequest(
+                recordType = NutritionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+            )
+            val nutRes = client.readRecords(nutReq)
+            for (rec in nutRes.records) {
+                val item = JSObject()
+                item.put("startTime", rec.startTime.toString())
+                item.put("endTime", rec.endTime.toString())
+                item.put("name", rec.name ?: "Suplemento")
+                item.put("proteinGrams", rec.protein?.inGrams ?: 0.0)
+                item.put("dataOrigin", rec.metadata.dataOrigin.packageName)
+                item.put("recordId", rec.metadata.id)
+                nutritionArray.put(item)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Não foi possível ler NutritionRecord: ${e.message}")
+        }
+
         ret.put("weights", weightsArray)
         ret.put("records", weightsArray) // Retrocompatibilidade direta
         ret.put("bodyFat", bodyFatArray)
@@ -498,6 +524,7 @@ class HealthConnectPlugin : Plugin() {
         ret.put("heartRates", heartRateArray)
         ret.put("hydration", hydrationArray)
         ret.put("exercises", exercisesArray)
+        ret.put("nutrition", nutritionArray)
     }
 
     @PluginMethod
@@ -532,6 +559,37 @@ class HealthConnectPlugin : Plugin() {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao gravar treino no Health Connect", e)
             call.reject("Erro ao gravar treino: " + e.message, e)
+        }
+    }
+
+    @PluginMethod
+    fun writeNutrition(call: PluginCall) {
+        try {
+            val client = HealthConnectClient.getOrCreate(context)
+            val name = call.getString("name", "Whey Protein / Suplementação") ?: "Whey Protein"
+            val proteinGrams = call.getDouble("proteinGrams", 30.0) ?: 30.0
+            val timeStr = call.getString("time")
+            val recordTime = if (timeStr != null) Instant.parse(timeStr) else Instant.now()
+
+            val record = NutritionRecord(
+                startTime = recordTime,
+                startZoneOffset = null,
+                endTime = recordTime.plusSeconds(60),
+                endZoneOffset = null,
+                name = name,
+                protein = Mass.grams(proteinGrams)
+            )
+
+            runBlocking {
+                val response = client.insertRecords(listOf(record))
+                val res = JSObject()
+                res.put("success", true)
+                res.put("recordIds", JSArray(response.recordIdsList))
+                call.resolve(res)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao gravar nutrição no Health Connect", e)
+            call.reject("Erro ao gravar nutrição: " + e.message, e)
         }
     }
 }
