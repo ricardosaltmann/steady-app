@@ -319,11 +319,12 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
           const bfCount = hcData?.bodyFat?.length ?? 0;
           const glucoseCount = hcData?.glucose?.length ?? 0;
           const hydCount = hcData?.hydration?.length ?? 0;
-          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + glucoseCount + hydCount;
+          const exerciseCount = hcData?.exercises?.length ?? 0;
+          const totalRecords = weightCount + stepsCount + sleepCount + hrCount + bfCount + glucoseCount + hydCount + exerciseCount;
 
           // Alerta visual de debug solicitado pelo usuário APENAS no clique manual
           if (isManualClick) {
-            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Glicose: ${glucoseCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
+            alert(`Health Connect: ${totalRecords} registros encontrados nos últimos 60 dias!\n\n• Pesagens: ${weightCount}\n• Gordura Corporal: ${bfCount}\n• Glicose: ${glucoseCount}\n• Exercícios: ${exerciseCount}\n• Passos: ${stepsCount}\n• Sessões de Sono: ${sleepCount}\n• Freq. Cardíaca: ${hrCount}\n• Hidratação: ${hydCount}`);
           }
           console.log('[Health Connect] Resultado de leitura completa:', hcData);
         } catch (readErr: any) {
@@ -886,7 +887,17 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                             {isHealthConnect ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-400 bg-teal-950/60 px-2 py-0.5 rounded-md border border-teal-800/40" title={entry.dataOrigin || 'Health Connect Android'}>
                                 <Smartphone className="w-3 h-3" />
-                                {entry.dataOrigin ? (entry.dataOrigin.includes('.') ? entry.dataOrigin.split('.').pop() : entry.dataOrigin) : 'Health Connect'}
+                                {(() => {
+                                  if (!entry.dataOrigin) return 'Health Connect';
+                                  const lower = entry.dataOrigin.toLowerCase();
+                                  if (lower.includes('shealth') || lower.includes('samsung')) return 'Samsung Health';
+                                  if (lower.includes('fitness') || lower.includes('google')) return 'Google Fit';
+                                  if (lower.includes('withings')) return 'Withings';
+                                  if (lower.includes('garmin')) return 'Garmin';
+                                  if (lower.includes('whoop')) return 'Whoop';
+                                  if (lower.includes('strava')) return 'Strava';
+                                  return entry.dataOrigin.includes('.') ? entry.dataOrigin.split('.').pop() : entry.dataOrigin;
+                                })()}
                               </span>
                             ) : isGoogleSynced ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">
@@ -1041,13 +1052,13 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-white">Google Fit & Health Connect</h3>
+                    <h3 className="text-base font-bold text-white">Samsung Health, Google Fit & Health Connect</h3>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
                       Sincronização Direta
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Conecte sua conta para importar automaticamente pesagens da sua balança inteligente e do app Google Fit
+                    Importe automaticamente pesagens, bioimpedância (Galaxy Watch), sono e exercícios via Health Connect
                   </p>
                 </div>
               </div>
@@ -1254,7 +1265,7 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             <div className="mt-5 space-y-4">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                <h4 className="text-sm font-bold text-white">Importação Direta do Fitbit & Google Health Connect</h4>
+                <h4 className="text-sm font-bold text-white">Importação Direta do Samsung Health, Fitbit & Health Connect</h4>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1265,14 +1276,14 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-white flex items-center gap-1.5">
                         <Activity className="w-4 h-4 text-emerald-400" />
-                        Google Health Connect
+                        Samsung Health & Health Connect
                       </span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
                         Nativo Android
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-                      Lê diretamente o banco de dados de saúde do Android alimentado pelo seu app Fitbit e balanças digitais.
+                      Lê dados de pesagens, bioimpedância do Galaxy Watch, treinos e sono via Health Connect no Android.
                     </p>
                     <div className="mt-2.5 p-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] space-y-1">
                       <div className="text-slate-300 font-medium flex items-center gap-1.5">
@@ -1282,6 +1293,10 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
                       <div className="text-slate-400 flex items-center gap-1.5">
                         <CheckCircle2 className="w-3 h-3 text-teal-400" />
                         <span>Frequência Cardíaca e Hidratação</span>
+                      </div>
+                      <div className="text-slate-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-cyan-400" />
+                        <span>Treinos, Passos e Sono</span>
                       </div>
                     </div>
                   </div>
@@ -1389,13 +1404,13 @@ export const SymptomTracker: React.FC<SymptomTrackerProps> = ({
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2.5">
               <h4 className="text-xs font-bold text-white flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-emerald-400" />
-                Como funciona com sua Balança Digital
+                Balanças Digitais & Samsung Health
               </h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Balanças inteligentes das marcas <strong>Xiaomi Mi Body</strong>, <strong>Withings</strong>, <strong>Renpho</strong>, <strong>Garmin</strong> e <strong>Omron</strong> gravam suas pesagens automaticamente no <strong>Google Health Connect / Google Fit</strong> via Bluetooth.
+                Relógios como <strong>Samsung Galaxy Watch</strong> (bioimpedância, sono e batimentos) e balanças inteligentes (<strong>Xiaomi</strong>, <strong>Withings</strong>, <strong>Renpho</strong>, <strong>Garmin</strong>) gravam dados automaticamente no <strong>Samsung Health & Health Connect</strong>.
               </p>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Ao conectar sua conta Google aqui no SteadySync, essas medições chegam automaticamente ao seu gráfico, correlacionando a evolução de peso com suas aplicações de peptídeos.
+                Ativando o Health Connect no SteadySync e no Samsung Health, todas as pesagens e bioimpedâncias chegam diretamente ao seu prontuário, correlacionando peso com farmacocinética e treinos.
               </p>
             </div>
 
